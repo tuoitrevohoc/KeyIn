@@ -5,16 +5,25 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v4
+      - name: Add ARM64 target
+        if: matrix.arch == 'arm64'
+        run: rustup target add aarch64-pc-windows-msvc
       - name: Test engine
+        if: matrix.arch == 'x64'
         run: cargo test --locked
       - name: Lint text service
         run: cargo clippy --locked --manifest-path windows/Cargo.toml -- -D warnings
       - name: Build installer
         shell: pwsh
-        run: ./windows/build.ps1
+        run: ./windows/build.ps1 -Arch ${{ matrix.arch }}
       - name: Test Rime binding against the packaged librime
+        if: matrix.arch == 'x64'
         shell: pwsh
         run: |
           $env:KEYIN_RIME_LIB = "$PWD\build\windows\stage\rime.dll"
@@ -22,5 +31,5 @@ jobs:
           cargo test --locked --test rime_engine -- --nocapture
       - uses: actions/upload-artifact@v4
         with:
-          name: KeyIn-windows-x64
+          name: KeyIn-windows-${{ matrix.arch }}
           path: build/windows/*.msi

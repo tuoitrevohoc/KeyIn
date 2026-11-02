@@ -12,33 +12,39 @@ $out = Join-Path $root "build\windows"
 $stage = Join-Path $out "stage"
 $target = @{ x64 = "x86_64-pc-windows-msvc"; arm64 = "aarch64-pc-windows-msvc" }[$Arch]
 if (-not $target) { throw "Unsupported architecture: $Arch" }
-if ($Arch -ne "x64") { throw "librime publishes MSVC builds for x64 and x86 only; build librime for $Arch first." }
+# librime publishes MSVC builds for x64 and x86 only. Without rime.dll the text service
+# uses the engine's built-in Pinyin candidates, so ARM64 still installs and types natively.
+$withRime = $Arch -eq "x64"
 $version = (Select-String -Path (Join-Path $root "windows\Cargo.toml") -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
 
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $stage, (Join-Path $stage "rime\build"), (Join-Path $out "rime-user") | Out-Null
+New-Item -ItemType Directory -Force $stage | Out-Null
 
-# librime: the official MSVC release, matching the macOS Homebrew version.
-$archive = Join-Path $out "librime-$RimeVersion-$Arch.7z"
-if (-not (Test-Path $archive)) {
-    $release = Invoke-RestMethod "https://api.github.com/repos/rime/librime/releases/tags/$RimeVersion" -Headers @{ "User-Agent" = "keyin-build" }
-    $asset = $release.assets | Where-Object { $_.name -like "rime-*-Windows-msvc-$Arch.7z" -and $_.name -notlike "rime-deps-*" } | Select-Object -First 1
-    if (-not $asset) { throw "No librime $RimeVersion MSVC $Arch asset" }
-    Invoke-WebRequest $asset.browser_download_url -OutFile $archive
+if ($withRime) {
+    New-Item -ItemType Directory -Force (Join-Path $stage "rime\build"), (Join-Path $out "rime-user") | Out-Null
+    # librime: the official MSVC release, matching the macOS Homebrew version.
+    $archive = Join-Path $out "librime-$RimeVersion-$Arch.7z"
+    if (-not (Test-Path $archive)) {
+        $release = Invoke-RestMethod "https://api.github.com/repos/rime/librime/releases/tags/$RimeVersion" -Headers @{ "User-Agent" = "keyin-build" }
+        $asset = $release.assets | Where-Object { $_.name -like "rime-*-Windows-msvc-$Arch.7z" -and $_.name -notlike "rime-deps-*" } | Select-Object -First 1
+        if (-not $asset) { throw "No librime $RimeVersion MSVC $Arch asset" }
+        Invoke-WebRequest $asset.browser_download_url -OutFile $archive
+    }
+    $librime = Join-Path $out "librime-$Arch"
+    Remove-Item -Recurse -Force $librime -ErrorAction SilentlyContinue
+    7z x $archive "-o$librime" -y | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "7z failed" }
+    Copy-Item (Join-Path $librime "dist\lib\rime.dll") $stage
+    Copy-Item (Join-Path $librime "dist\lib\rime.dll") (Join-Path $librime "dist\bin")
+
+    # Rime schemas and dictionaries, precompiled like scripts/build.sh does on macOS.
+    $rime = Join-Path $stage "rime"
+    Copy-Item (Join-Path $root "data\rime\*.yaml"), (Join-Path $root "data\pinyin_simp.dict.yaml") $rime
+    Get-Content (Join-Path $root "data\rime\keyin-phrases.tsv") -Encoding UTF8 | Add-Content (Join-Path $rime "pinyin_simp.dict.yaml") -Encoding UTF8
+    & (Join-Path $librime "dist\bin\rime_deployer.exe") --build (Join-Path $out "rime-user") $rime (Join-Path $rime "build")
+    if ($LASTEXITCODE -ne 0) { throw "rime_deployer failed" }
+    Copy-Item (Join-Path $librime "version-info.txt") (Join-Path $stage "librime-version-info.txt")
 }
-$librime = Join-Path $out "librime-$Arch"
-Remove-Item -Recurse -Force $librime -ErrorAction SilentlyContinue
-7z x $archive "-o$librime" -y | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "7z failed" }
-Copy-Item (Join-Path $librime "dist\lib\rime.dll") $stage
-Copy-Item (Join-Path $librime "dist\lib\rime.dll") (Join-Path $librime "dist\bin")
-
-# Rime schemas and dictionaries, precompiled like scripts/build.sh does on macOS.
-$rime = Join-Path $stage "rime"
-Copy-Item (Join-Path $root "data\rime\*.yaml"), (Join-Path $root "data\pinyin_simp.dict.yaml") $rime
-Get-Content (Join-Path $root "data\rime\keyin-phrases.tsv") -Encoding UTF8 | Add-Content (Join-Path $rime "pinyin_simp.dict.yaml") -Encoding UTF8
-& (Join-Path $librime "dist\bin\rime_deployer.exe") --build (Join-Path $out "rime-user") $rime (Join-Path $rime "build")
-if ($LASTEXITCODE -ne 0) { throw "rime_deployer failed" }
 
 # The text service DLL.
 cargo build --release --locked --manifest-path (Join-Path $root "windows\Cargo.toml") --target $target
@@ -50,7 +56,7 @@ Copy-Item (Join-Path $root "data\chinese-meanings.json") $stage
 $notices = Join-Path $stage "ThirdParty"
 New-Item -ItemType Directory -Force $notices | Out-Null
 Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "data\LICENSE.*"), (Join-Path $root "data\COPYING.GPL3"), (Join-Path $root "data\README.*.md"), (Join-Path $root "data\chinese-meanings-manifest.json") $notices
-Copy-Item (Join-Path $librime "version-info.txt") (Join-Path $notices "librime-version-info.txt")
+if ($withRime) { Move-Item (Join-Path $stage "librime-version-info.txt") $notices }
 
 # MSI via WiX (installed as a .NET tool on first use).
 if (-not (Get-Command wix -ErrorAction SilentlyContinue)) {

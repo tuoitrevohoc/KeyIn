@@ -25,8 +25,10 @@ On Windows 10/11 x64 with Rust (MSVC toolchain), 7-Zip and the .NET SDK:
 
 The script downloads the official librime MSVC build (same version as macOS),
 precompiles the Rime data, builds `keyin_tsf.dll` and packages
-`build\windows\KeyIn-<version>-windows-x64.msi` with WiX. The `Windows` GitHub
-workflow does the same on every push and uploads the MSI as an artifact.
+`build\windows\KeyIn-<version>-windows-x64.msi` with WiX. Pass `-Arch arm64` (after
+`rustup target add aarch64-pc-windows-msvc`) for Windows on ARM, e.g. a UTM or
+Parallels VM on Apple Silicon. The `Windows` GitHub workflow builds both and uploads
+the MSIs as artifacts.
 
 ## Install and use
 
@@ -45,8 +47,9 @@ Shift+Tab to toggle Auto while a word is being composed. Uninstall from **Instal
 - Rime runs inside each application process. Its learning user dictionary can only be
   opened by one process at a time, so "Học lựa chọn tiếng Trung" is off by default on
   Windows. Sharing learning across apps needs an out-of-process server (as Weasel does).
-- x64 only: librime publishes MSVC builds for x64 and x86. 32-bit applications and
-  native ARM64 applications need x86 / ARM64 builds of both librime and this DLL.
+- librime publishes MSVC builds for x64 and x86 only, so the ARM64 MSI (`-Arch arm64`)
+  ships without Rime: Chinese uses the engine's built-in Pinyin candidates there. Each
+  MSI serves processes of its own architecture; 32-bit apps need an x86 build.
 - Composition text has no underline yet (no `ITfDisplayAttributeProvider`), and the
   candidate window is not per-monitor-DPI aware.
 - Sandboxed apps (Store/AppContainer) cannot write `%APPDATA%\KeyIn\Rime`; there KeyIn
