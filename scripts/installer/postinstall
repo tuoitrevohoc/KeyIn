@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+# Registration is refreshed by macOS on the next login. Do not run user-session
+# Carbon APIs as root or change the user's selected input source.
+echo 'KeyIn installed. Log out and back in, then add KeyIn in System Settings > Keyboard > Text Input > Edit > + > Vietnamese.'

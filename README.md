@@ -5,11 +5,12 @@
 ![KeyIn animated typing demo](docs/media/keyin-demo.gif)
 
 The animation records real KeyIn controller and Rime output, one keystroke at a
-time, in a demonstration layout (not a TextEdit screen recording). It shows
-English, Vietnamese Telex, Chinese Pinyin, and contextual initials.
+time, with KeyIn's actual candidate panel drawn into a demonstration layout (not a
+TextEdit screen recording). It shows English, Vietnamese Telex, Chinese Pinyin,
+contextual initials, and switching a word's language with Tab.
 Reproduce it after building with `./scripts/record-demo.sh` (requires FFmpeg).
 
-**Status:** experimental 0.3 source release · **License:** LGPL-3.0-or-later
+**Status:** experimental 0.4 preview · **License:** LGPL-3.0-or-later
 
 ## Overview
 
@@ -22,6 +23,71 @@ This is an experimental source release, not a production-readiness claim. The cu
 Homebrew-based ARM64 build requires macOS 27 because of its bundled dependencies.
 The build derives the minimum OS version from the packaged Mach-O files; older
 macOS support requires rebuilding all dependencies for that deployment target.
+
+## How it works
+
+Type normally; KeyIn decides per word whether you are writing English, Vietnamese
+(Telex) or Chinese (Pinyin), using the word itself and the language of your last
+few words. While a word is being composed it is underlined in the app, and a
+small frosted panel appears under it:
+
+- **Candidate row:** numbered suggestions in one line. The first (highlighted in
+  blue) is what Space inserts; `1`–`9` pick another, `←` `→` page through more
+  (the `›` arrow means more pages exist).
+- **Footer:** the active language (🇺🇸 EN, 🇻🇳 VI, 🇨🇳 简中) in its colour, Auto or
+  Manual, and the keys that work right now.
+
+| While typing a word | Does |
+| --- | --- |
+| Space / Return | Insert the highlighted candidate (or the composed word) |
+| 1–9 | Insert that candidate |
+| ← → | Previous / next candidate page |
+| Tab | Switch this word's language: EN → VI → 中 |
+| Shift–Tab | Turn Auto detection off (keeps the current language) or back on |
+| ↑ ↓ | Choose among the languages Auto thinks are plausible |
+| Esc | Keep the raw keystrokes |
+
+Tab and Shift–Tab are only taken while a word is being composed; at any other
+time they reach the app as usual.
+
+### Settings
+
+Click the KeyIn icon in the menu bar and choose **Tùy chỉnh…** (⌘,).
+
+![KeyIn settings window](docs/media/keyin-settings.png)
+
+- **Ngôn ngữ:** turn English, Vietnamese or Chinese on or off. Disabled languages
+  are never detected and are skipped by Tab; at least one stays on, and with a
+  single language KeyIn simply types in it.
+- **Tự động nhận diện:** Auto detection (same as Shift–Tab).
+- **Tự sửa lỗi gõ:** conservative English/Vietnamese typo correction.
+- **Tab đổi tiếng, ⇧Tab bật/tắt tự động:** turn the Tab shortcuts off to let Tab
+  commit the word instead.
+- **Nghĩa chữ Hán:** show Vietnamese or English meanings beside Chinese
+  candidates.
+
+## Install
+
+Requires Apple Silicon and macOS 27.0 or later.
+
+1. Download `KeyIn-<version>-macos-arm64.pkg` from the
+   [latest release](https://github.com/tuoitrevohoc/KeyIn/releases).
+   `SHA256SUMS.txt` in the same release lists its checksum
+   (`shasum -a 256 KeyIn-*.pkg`).
+2. If KeyIn is already installed, switch to ABC and quit KeyIn in Activity
+   Monitor. If an older copy exists in `~/Library/Input Methods`, move it to a
+   backup folder first.
+3. Open the package and follow the installer. It installs
+   `/Library/Input Methods/KeyIn.app` for all users.
+4. Log out of macOS and log back in.
+5. Open **System Settings > Keyboard > Text Input > Edit > +**, find KeyIn under
+   Vietnamese, add it, and select KeyIn in the input menu.
+6. Optional: choose **Tùy chỉnh…** in the KeyIn menu to pick languages and
+   options (see [Settings](#settings)).
+
+To uninstall, switch to ABC, quit KeyIn, remove it from Keyboard settings, and
+delete `/Library/Input Methods/KeyIn.app`. Typing history and preferences are
+not removed.
 
 ## Build and verification
 
@@ -43,6 +109,12 @@ Installation registers `~/Library/Input Methods/KeyIn.app`. The install script
 still refuses to overwrite an existing app; back up the old app and switch to ABC
 before replacing it. Select KeyIn from the input menu afterward.
 
+`./scripts/package.sh` turns `build/KeyIn.app` into an all-users installer at
+`build/installer/<version>/`. Set `KEYIN_APP_IDENTITY` (Developer ID Application)
+and `KEYIN_INSTALLER_IDENTITY` (Developer ID Installer) to sign it, and
+`KEYIN_NOTARY_PROFILE` (a `notarytool store-credentials` profile) to notarize
+and staple it. Without them the package is unsigned.
+
 ## Typing
 
 - **English:** words compose inline. Common words are protected from Telex.
@@ -60,12 +132,15 @@ before replacing it. Select KeyIn from the input menu afterward.
   **Shift–Left / Shift–Right, Home / End:** move within Rime composition.
   Rime navigates syllable/segment boundaries; Backspace edits at that position.
 - **Escape:** retain the raw Pinyin/Telex keystrokes. Focus changes and app
-  shortcuts also preserve unselected Pinyin. Tab advances focus only after a
-  partial Chinese composition has been fully committed.
+  shortcuts also preserve unselected Pinyin.
 
-**Command–Space** cycles English → Vietnamese → Chinese in manual mode. It
-requires reassigning macOS Spotlight's conflicting shortcut yourself. Choose
-**Automatically detect language** in the input menu to return to Auto.
+**Tab** switches the word being typed to the next enabled language (English →
+Vietnamese → Chinese). In manual mode the new language stays for the following
+words. **Shift–Tab** toggles Auto: turning it off pins the language currently
+shown; turning it on resumes per-word detection. Neither key is taken when no
+word is being composed. Both can be disabled in **Tùy chỉnh…**, in which case Tab
+commits the word and moves on as in earlier versions. (The Command–Space hotkey of
+0.3 has been removed; it conflicted with Spotlight.)
 
 ## Auto detection with session context
 
@@ -87,26 +162,27 @@ names or difficult mixed-language cases.
 Vietnamese validation uses 7,067 dictionary components and accepts both `hòa`
 and `hoà` tone placement. Unknown or incomplete syllables can remain raw. Manual
 Vietnamese bypasses dictionary validation. If Rime data/session initialization
-fails, the older Rust Chinese path remains available; the menu identifies the
-active engine or fallback.
+fails, the older Rust Chinese path remains available.
 
 ## Learning, correction, and status
 
-**Learn Chinese candidate choices (local)** is enabled initially. It uses
-`~/Library/Application Support/KeyIn/Rime/pinyin_simp.userdb`. Turning it off
-switches to a schema without user-dictionary learning or lookup; previously
-learned data remains on disk. To reset learning, switch away from KeyIn, quit its
+Local learning of Chinese candidate choices is on. It uses
+`~/Library/Application Support/KeyIn/Rime/pinyin_simp.userdb`. To turn it off,
+run `defaults write org.keyin.inputmethod.KeyIn LearnChinese -bool NO` and
+reselect KeyIn; KeyIn then uses a schema without user-dictionary learning or
+lookup, and previously learned data remains on disk. To reset learning, switch away from KeyIn, quit its
 process, back up and remove that directory, and activate KeyIn again.
 
-**Automatically correct typos** controls the conservative English/Vietnamese
+**Tự sửa lỗi gõ** in settings controls the conservative English/Vietnamese
 corrector. It previews repairs such as `teh` → `the`, `tienegs` → `tiếng`, and
-`nhwgn` → `nhưng`; Space/Return/Tab accepts and Escape retains the original.
+`nhwgn` → `nhưng`; Space/Return accepts and Escape retains the original.
 Rime handles its own Chinese composition/completion; arbitrary typo repair,
 fuzzy-Pinyin rules, and sentence grammar rewriting are not yet implemented.
 
-The compact, square-cornered white status panel uses 6-point horizontal padding and shows 🇻🇳 VI, 🇨🇳 简中, or 🇺🇸 EN with a language color,
-Auto/Manual, and candidate-page hints. It remains between words, hides when KeyIn
-is inactive, and moves above the caret near the screen's bottom edge.
+The panel (see [How it works](#how-it-works)) follows the system light/dark
+appearance. Its footer always shows the active language and Auto/Manual; it
+remains between words, hides when KeyIn is inactive, and moves above the caret
+near the screen's bottom edge.
 
 ## Validation and remaining release work
 
@@ -182,10 +258,9 @@ when no composition or no alternatives exist; manual mode is unchanged.
 
 ### Chinese word meanings
 
-In the KeyIn input menu, choose **Nghĩa từ tiếng Trung: Tiếng Việt** or
-**Chinese word meanings: English** to show a gloss beside each Chinese candidate
-while typing. Choose **Nghĩa từ tiếng Trung: Tắt** to restore the compact grid
-(the default). The selection is saved; number keys and Space still insert only
+In **Tùy chỉnh…**, set **Nghĩa chữ Hán** to **Tiếng Việt** or **English** to show a
+gloss beside each Chinese candidate while typing; candidates then list
+vertically. Choose **Tắt** to restore the single candidate row (the default). The selection is saved; number keys and Space still insert only
 Chinese text.
 
 Lookup is offline using `data/chinese-meanings.json`: 125,353 distinct simplified

@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.0</string>
+	<string>0.4.0</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>ComponentInputModeDict</key>
 	<dict>
 		<key>tsInputModeListKey</key>
@@ -28,18 +28,18 @@
 				<string>org.keyin.inputmethod.KeyIn.multilingual</string>
 				<key>TISIntendedLanguage</key>
 				<string>vi</string>
+				<key>tsInputModeAlternateMenuIconFileKey</key>
+				<string>KeyInSelected.pdf</string>
 				<key>tsInputModeDefaultStateKey</key>
 				<true/>
 				<key>tsInputModeIsVisibleKey</key>
 				<true/>
 				<key>tsInputModeMenuIconFileKey</key>
 				<string>KeyIn.pdf</string>
-				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>KeyInSelected.pdf</string>
-				<key>tsInputModePaletteIconFileKey</key>
-				<string>KeyIn.pdf</string>
 				<key>tsInputModeMenuItemTitleKey</key>
 				<string>KeyIn</string>
+				<key>tsInputModePaletteIconFileKey</key>
+				<string>KeyIn.pdf</string>
 				<key>tsInputModePrimaryInScriptKey</key>
 				<true/>
 				<key>tsInputModeScriptKey</key>

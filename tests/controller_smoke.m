@@ -54,10 +54,9 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSArray *originalChoices = controller.choices.copy;
     NSString *originalMarked = client.marked.copy;
     for (NSInteger mode = 0; mode <= 2; mode++) {
-        NSMenuItem *item = [NSMenuItem new]; item.tag = mode;
-        [controller selectChineseMeaningLanguage:@{(NSString *)kIMKCommandMenuItemName: item}];
+        [NSUserDefaults.standardUserDefaults setInteger:mode forKey:@"ChineseMeaningLanguage"];
         NSString *label = [controller candidateLabelAtIndex:0 number:1];
-        check([label isEqualToString:@[@"1  你好", @"1  你好 — xin chào", @"1  你好 — hello"][mode]], @"meaning language selection");
+        check([label isEqualToString:@[@"1 你好", @"1 你好 — xin chào", @"1 你好 — hello"][mode]], @"meaning language selection");
         check([controller.choices isEqual:originalChoices] && [client.marked isEqual:originalMarked], @"meaning selection preserves composition and order");
     }
     check([controller meaningForCandidate:@"🫠"] == nil, @"unknown characters have no placeholder");
@@ -67,11 +66,10 @@ int main(int argc, const char **argv) { @autoreleasepool {
         @"学": @{@"en": @"learn"}, @"𠮷": @{@"en": @"lucky"}};
     check([[controller meaningForCandidate:@"我学习中文！"] isEqualToString:@"我: I · 学习: study · 中文: Chinese"], @"sentence splits into longest words and characters");
     check([[controller meaningForCandidate:@"𠮷🫠我"] isEqualToString:@"𠮷: lucky · 我: I"], @"Unicode characters and unknown segments");
-    NSMenuItem *meaningItem = [NSMenuItem new]; meaningItem.tag = 1;
-    [controller selectChineseMeaningLanguage:@{(NSString *)kIMKCommandMenuItemName: meaningItem}];
+    [NSUserDefaults.standardUserDefaults setInteger:1 forKey:@"ChineseMeaningLanguage"];
     check([[controller meaningForCandidate:@"我学习中文"] isEqualToString:@"我: tôi · 学习: học · 中文: tiếng Trung"], @"Vietnamese sentence annotations");
     controller.choices = @[@"🫠"];
-    check([[controller candidateLabelAtIndex:0 number:1] isEqualToString:@"1  🫠"], @"unknown candidate has no empty separator");
+    check([[controller candidateLabelAtIndex:0 number:1] isEqualToString:@"1 🫠"], @"unknown candidate has no empty separator");
     controller.choices = originalChoices;
     controller.meanings = dictionary;
     type(controller, @" ");

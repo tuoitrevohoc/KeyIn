@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+# Never replace an input method while it is serving a composition.
+if /usr/bin/pgrep -x KeyIn >/dev/null; then
+    echo 'Switch to ABC, quit KeyIn in Activity Monitor, then run the installer again.' >&2
+    exit 1
+fi
+# Do not silently move or modify other users' installed applications.
+for user_home in /Users/*; do
+    if [[ -d "$user_home/Library/Input Methods/KeyIn.app" ]]; then
+        echo "Move $user_home/Library/Input Methods/KeyIn.app to a backup folder before installing the all-users package." >&2
+        exit 1
+    fi
+done
