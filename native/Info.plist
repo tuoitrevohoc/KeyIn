@@ -17,7 +17,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.2.0</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>ComponentInputModeDict</key>
 	<dict>
 		<key>tsInputModeListKey</key>
@@ -32,6 +32,12 @@
 				<true/>
 				<key>tsInputModeIsVisibleKey</key>
 				<true/>
+				<key>tsInputModeMenuIconFileKey</key>
+				<string>KeyIn.pdf</string>
+				<key>tsInputModeAlternateMenuIconFileKey</key>
+				<string>KeyInSelected.pdf</string>
+				<key>tsInputModePaletteIconFileKey</key>
+				<string>KeyIn.pdf</string>
 				<key>tsInputModeMenuItemTitleKey</key>
 				<string>KeyIn</string>
 				<key>tsInputModePrimaryInScriptKey</key>

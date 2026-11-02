@@ -12,6 +12,7 @@ cat data/rime/keyin-phrases.tsv >> build/rime-data/pinyin_simp.dict.yaml
 app="$PWD/build/KeyIn.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp native/Info.plist "$app/Contents/Info.plist"
+cp native/Icons/*.pdf "$app/Contents/Resources/"
 cp data/LICENSE.rime data/COPYING.GPL3 data/LICENSE.vntk data/LICENSE.pinyin-simp data/README.vietnamese.md README.md "$app/Contents/Resources/"
 mkdir -p "$app/Contents/Resources/rime"
 ditto build/rime-data "$app/Contents/Resources/rime"

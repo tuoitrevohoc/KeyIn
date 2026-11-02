@@ -1,0 +1,32 @@
+KeyIn 0.2.0 (build 4) — experimental macOS input method
+
+Requirements: Apple Silicon (arm64), macOS 27.0 or later.
+No Homebrew installation is required to run this bundle.
+
+Installation
+1. Switch your input source to ABC. Finish any uncommitted composition.
+2. In Finder, choose Go > Go to Folder and open ~/Library/Input Methods/.
+   Create the Input Methods folder if it does not exist.
+3. If KeyIn.app already exists, quit KeyIn in Activity Monitor and move the old
+   app to a backup folder outside Input Methods before installing this version.
+4. Copy the included KeyIn.app into ~/Library/Input Methods/.
+5. Log out and log back in. Add KeyIn in System Settings > Keyboard > Text Input
+   > Edit > + (look under Vietnamese), then select KeyIn in the input menu.
+
+This build is ad hoc signed, not Developer ID signed or notarized. macOS may
+block it. Follow your system's normal security review/approval workflow only
+if you trust the source, or build from the published source yourself.
+
+Known limitations
+- A status panel can remain visible at a screen corner when caret coordinates
+  are unavailable. This release does not fix that issue. To dismiss a stuck
+  panel, switch to ABC and quit KeyIn in Activity Monitor, then select it again.
+- Auto language detection is heuristic; use manual mode for ambiguous text.
+- Command-Space conflicts with Spotlight unless you reassign that shortcut.
+- Intel Macs and older macOS versions are not supported by this binary.
+
+Source, build instructions, licenses and issues:
+https://github.com/tuoitrevohoc/KeyIn
+Source for this release: tag v0.2.0
+KeyIn source license: LGPL-3.0-or-later.
+Dependency notices are inside KeyIn.app/Contents/Resources/ThirdParty.
