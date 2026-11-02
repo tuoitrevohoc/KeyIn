@@ -455,7 +455,7 @@ static NSImage *roundedMask(CGFloat radius) {
     CGFloat width, height;
     BOOL more = pages > 1;
     if (showMeanings) {
-        width = 520;
+        width = MAX(520, statusWidth); // Rows span the panel even when the footer widens it.
         CGFloat y = footerHeight + inset;
         CGFloat textWidth = width - 2 * inset - 2 * itemPadding;
         // Lay rows out bottom-up so the first candidate ends on top.

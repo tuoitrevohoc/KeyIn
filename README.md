@@ -4,10 +4,12 @@
 
 ![KeyIn animated typing demo](docs/media/keyin-demo.gif)
 
-The animation records real KeyIn controller and Rime output, one keystroke at a
-time, with KeyIn's actual candidate panel drawn into a demonstration layout (not a
-TextEdit screen recording). It shows English, Vietnamese Telex, Chinese Pinyin,
-contextual initials, and switching a word's language with Tab.
+One sentence, typed key by key in Auto mode, moves between Vietnamese Telex,
+English and Chinese Pinyin without any switching key: `tieengs` becomes *tiếng*,
+`my friend` stays English, `nihao` becomes 你好, and Chinese candidates show their
+English meanings while you choose. The animation records real KeyIn controller
+and Rime output with KeyIn's actual candidate panel drawn into a document layout
+(it is not a screen recording).
 Reproduce it after building with `./scripts/record-demo.sh` (requires FFmpeg).
 
 **Status:** experimental 0.4 preview · **License:** LGPL-3.0-or-later

@@ -28,7 +28,8 @@ static void type(TestController *controller, NSString *input) {
         NSString *ch = [input substringWithRange:NSMakeRange(i, 1)];
         unsigned short code = [ch isEqualToString:@" "] ? kVK_Space : ([ch isEqualToString:@"\t"] ? kVK_Tab : 0);
         NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:0 context:nil characters:ch charactersIgnoringModifiers:ch isARepeat:NO keyCode:code];
-        [controller handleEvent:event client:(id)controller.fake];
+        // Keys the input method passes through (punctuation) reach the app as typed.
+        if (![controller handleEvent:event client:(id)controller.fake] && code != kVK_Tab) [controller.fake.committed appendString:ch];
     }
 }
 static BOOL arrow(TestController *controller, unsigned short key) {
@@ -65,27 +66,49 @@ static void drawPanel(KeyInController *c, NSPoint topLeft) {
         [rep drawInRect:rect fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
     }
 }
-static void frame(TestController *c, NSString *keys, NSString *title, NSString *dir, int index) {
-    NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:1000 pixelsHigh:540 bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+// One long mixed-language sentence in a plain document window; the real panel sits under the caret.
+static void frame(TestController *c, NSString *keys, NSString *dir, int index) {
+    const CGFloat W = 1000, H = 800;
+    NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:W pixelsHigh:H bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
     [NSGraphicsContext saveGraphicsState];
     NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:bitmap];
-    [[[NSGradient alloc] initWithStartingColor:[NSColor colorWithCalibratedRed:.91 green:.52 blue:.62 alpha:1]
-        endingColor:[NSColor colorWithCalibratedRed:.52 green:.56 blue:.95 alpha:1]] drawInRect:NSMakeRect(0,0,1000,540) angle:-20];
-    label(@"KeyIn",40,468,40,NSColor.whiteColor);
-    label(@"English · Tiếng Việt · 中文 — one input method, on-device",40,436,19,[NSColor colorWithWhite:1 alpha:.85]);
-    label(title,40,380,23,NSColor.whiteColor);
-    [[NSColor colorWithWhite:1 alpha:.92] setFill]; [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(32,262,936,96) xRadius:16 yRadius:16] fill];
-    NSFont *font = [NSFont systemFontOfSize:34];
-    NSMutableAttributedString *line = [[NSMutableAttributedString alloc] initWithString:c.fake.committed
-        attributes:@{NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor}];
-    [line appendAttributedString:[[NSAttributedString alloc] initWithString:c.fake.marked ?: @"" attributes:@{NSFontAttributeName: font,
-        NSForegroundColorAttributeName: NSColor.blackColor, NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle)}]];
-    [line drawAtPoint:NSMakePoint(60,288)];
-    CGFloat caret = 60 + line.size.width + 2;
-    [[NSColor systemBlueColor] setFill]; NSRectFill(NSMakeRect(caret,288,2,40));
-    CGFloat markedStart = 60 + [[NSAttributedString alloc] initWithString:c.fake.committed attributes:@{NSFontAttributeName: font}].size.width;
-    drawPanel(c, NSMakePoint(MIN(markedStart - 18, 990 - c.panel.frame.size.width), 252));
-    label([NSString stringWithFormat:@"Keys: %@",keys],40,32,19,NSColor.whiteColor);
+    [[NSColor colorWithCalibratedRed:.93 green:.93 blue:.96 alpha:1] setFill]; NSRectFill(NSMakeRect(0,0,W,H));
+    label(@"KeyIn",32,748,30,NSColor.blackColor);
+    label(@"English · Tiếng Việt · 中文 in one sentence — no switching keys, Auto detection per word",32,722,16,NSColor.darkGrayColor);
+    NSRect card = NSMakeRect(24,64,W-48,636);
+    [[NSColor whiteColor] setFill]; [[NSBezierPath bezierPathWithRoundedRect:card xRadius:12 yRadius:12] fill];
+    [[NSColor colorWithWhite:0 alpha:.12] setStroke]; [[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(card,.5,.5) xRadius:12 yRadius:12] stroke];
+    NSFont *font = [NSFont systemFontOfSize:28];
+    NSMutableParagraphStyle *style = [NSMutableParagraphStyle new]; style.lineSpacing = 10;
+    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:c.fake.committed
+        attributes:@{NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor, NSParagraphStyleAttributeName: style}];
+    NSUInteger markedStart = text.length;
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:c.fake.marked ?: @"" attributes:@{NSFontAttributeName: font,
+        NSForegroundColorAttributeName: NSColor.blackColor, NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle), NSParagraphStyleAttributeName: style}]];
+    // Lay the text out to find where the composition starts and where the caret ends.
+    NSTextStorage *storage = [[NSTextStorage alloc] initWithAttributedString:text];
+    NSLayoutManager *layout = [NSLayoutManager new]; [storage addLayoutManager:layout];
+    NSTextContainer *container = [[NSTextContainer alloc] initWithSize:NSMakeSize(card.size.width - 56, CGFLOAT_MAX)];
+    container.lineFragmentPadding = 0; [layout addTextContainer:container];
+    [layout ensureLayoutForTextContainer:container];
+    CGFloat top = NSMaxY(card) - 30;
+    NSRect used = [layout usedRectForTextContainer:container];
+    NSImage *image = [NSImage imageWithSize:NSMakeSize(container.size.width, MAX(used.size.height, 1)) flipped:YES drawingHandler:^BOOL(NSRect r) {
+        [layout drawGlyphsForGlyphRange:NSMakeRange(0, layout.numberOfGlyphs) atPoint:NSZeroPoint]; return YES; }];
+    [image drawAtPoint:NSMakePoint(card.origin.x + 28, top - image.size.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1];
+    NSRect caretLine = storage.length ? [layout lineFragmentRectForGlyphAtIndex:layout.numberOfGlyphs - 1 effectiveRange:NULL] : NSMakeRect(0,0,0,34);
+    NSPoint end = storage.length ? [layout locationForGlyphAtIndex:layout.numberOfGlyphs - 1] : NSZeroPoint;
+    CGFloat caretX = card.origin.x + 28 + (storage.length ? NSMaxX([layout boundingRectForGlyphRange:NSMakeRange(layout.numberOfGlyphs - 1, 1) inTextContainer:container]) : 0);
+    (void)end;
+    CGFloat lineTop = top - caretLine.origin.y, lineBottom = top - NSMaxY(caretLine);
+    [[NSColor systemBlueColor] setFill]; NSRectFill(NSMakeRect(caretX + 1, lineBottom + 10, 2, lineTop - lineBottom - 14));
+    if (c.raw.length) {
+        NSUInteger glyph = [layout glyphIndexForCharacterAtIndex:MIN(markedStart, storage.length - 1)];
+        CGFloat markX = card.origin.x + 28 + [layout boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:container].origin.x;
+        drawPanel(c, NSMakePoint(MIN(markX - 18, W - 12 - c.panel.frame.size.width), lineBottom + 4));
+    }
+    NSString *recent = keys.length > 60 ? [@"…" stringByAppendingString:[keys substringFromIndex:keys.length - 60]] : keys;
+    label([NSString stringWithFormat:@"Keys: %@", recent],32,24,17,NSColor.darkGrayColor);
     [NSGraphicsContext restoreGraphicsState];
     [[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:[dir stringByAppendingPathComponent:[NSString stringWithFormat:@"%04d.png",index]] atomically:YES];
 }
@@ -103,18 +126,24 @@ static void settingsSnapshot(NSString *dir) {
 int main(int argc,const char **argv) { @autoreleasepool {
     check(argc==4,@"shared data, user data, frames directory required");
     [NSApplication sharedApplication];
-    [NSUserDefaults.standardUserDefaults setVolatileDomain:@{@"AutomaticDetection":@YES,@"Language":@1,@"Autocorrect":@YES,@"EnabledLanguages":@14,@"TabShortcuts":@YES,@"ChineseMeaningLanguage":@0,@"LearnChinese":@NO} forName:NSArgumentDomain];
+    [NSUserDefaults.standardUserDefaults setVolatileDomain:@{@"AutomaticDetection":@YES,@"Language":@1,@"Autocorrect":@YES,@"EnabledLanguages":@14,@"TabShortcuts":@YES,@"ChineseMeaningLanguage":@2,@"LearnChinese":@NO} forName:NSArgumentDomain];
     check([KeyInRime startWithSharedData:@(argv[1]) userData:@(argv[2])],@"Rime startup");
     TestController *c=[TestController alloc]; c.raw=[NSMutableString new]; c.preedit=@""; c.choices=@[]; c.rime=[KeyInRime new]; c.recentLanguages=[NSMutableArray new]; c.fake=[FakeClient new]; c.fake.committed=[NSMutableString new];
-    NSArray *scenes=@[@[@"hello ",@"01  English stays English"],@[@"tieengs ",@"02  Vietnamese Telex: tieengs → tiếng"],@[@"zenmeyang ",@"03  Chinese Pinyin: zenmeyang → 怎么样"],@[@"nhlm ",@"04  Chinese initials after Chinese: nhlm → 你好了吗"],@[@"ban\t\t ",@"05  Tab cycles the word's language: EN → VI → 中"]];
+    // "|" marks a pause so the candidates (and Chinese meanings) can be read before Space.
+    NSString *sentence=@"Hoom nay tooi hojc tieengs Trung voiws my friend. Teacher nois nihao|  nghiax laf hello, xiexie|  nghiax laf thank you. Cuoois tuaanf, women| yiqi| qu chifan|  nhes!";
+    // The demo binary has no app bundle, so load the meanings dictionary from the source tree.
+    c.meanings=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:@"data/chinese-meanings.json"] options:0 error:nil];
+    check(c.meanings.count>0,@"Chinese meanings loaded");
+    NSMutableString *keys=[NSMutableString new];
     int index=0;
-    for (NSArray *scene in scenes) {
-        [c.fake.committed setString:@""]; NSMutableString *keys=[NSMutableString new];
-        for (NSUInteger i=0;i<[scene[0] length];i++) {
-            NSString *ch=[scene[0] substringWithRange:NSMakeRange(i,1)]; type(c,ch); [keys appendString:[ch isEqual:@" "]?@" [Space]":([ch isEqual:@"\t"]?@" [Tab]":ch)];
-            for(int hold=0;hold<([ch isEqual:@" "]?12:([ch isEqual:@"\t"]?7:2));hold++) frame(c,keys,scene[1],@(argv[3]),index++);
-        }
+    for (int hold=0;hold<8;hold++) frame(c,keys,@(argv[3]),index++);
+    for (NSUInteger i=0;i<sentence.length;i++) {
+        NSString *ch=[sentence substringWithRange:NSMakeRange(i,1)];
+        if ([ch isEqual:@"|"]) { for(int hold=0;hold<14;hold++) frame(c,keys,@(argv[3]),index++); continue; }
+        type(c,ch); [keys appendString:ch];
+        for(int hold=0;hold<([ch isEqual:@" "]?3:1);hold++) frame(c,keys,@(argv[3]),index++);
     }
+    for (int hold=0;hold<30;hold++) frame(c,keys,@(argv[3]),index++);
     settingsSnapshot(@(argv[3]));
     return 0;
 }}
