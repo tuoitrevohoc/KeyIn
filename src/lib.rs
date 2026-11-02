@@ -405,6 +405,9 @@ fn compose_with_context(raw: &str, mode: u32, previous: u32) -> String {
     };
     let detected = if mode != 0 {
         mode
+    } else if previous == 2 && valid_vietnamese(&vietnamese) {
+        // Resolve valid Vietnamese/English collisions using the typing context.
+        2
     } else if previous == 3
         && key.len() <= 3
         && !candidates.is_empty()
@@ -764,6 +767,15 @@ mod tests {
         assert_eq!(compose_with_context("ni", 1, 3), "English\nni");
         assert_eq!(compose_with_context("nhwng", 2, 3), "Vietnamese\nnhưng");
     }
+    #[test]
+    fn vietnamese_context_wins_ambiguous_english_words() {
+        assert_eq!(compose_with_context("its", 0, 2), "Vietnamese\nít");
+        assert_eq!(compose_with_context("its", 0, 1), "English\nits");
+        assert_eq!(compose_with_context("its", 1, 2), "English\nits");
+        assert_eq!(compose_with_context("hello", 0, 2), "English\nhello");
+        assert_eq!(compose_with_context("as", 0, 2), "Vietnamese\ná");
+    }
+
     #[test]
     fn initials_need_chinese_context_and_preserve_telex() {
         assert!(compose_with_context("nhlm", 0, 3).starts_with("Chinese\n"));

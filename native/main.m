@@ -17,6 +17,7 @@ static NSRange currentRange(void) { return NSMakeRange(NSNotFound, NSNotFound); 
 @property NSString *language;
 @property NSArray<NSString *> *choices;
 @property NSUInteger page;
+@property NSDictionary<NSString *, NSDictionary *> *meanings;
 @property NSPanel *panel;
 @property NSTextField *label;
 @property NSTextField *status;
@@ -66,7 +67,8 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
 - (void)hidePalettes { [self.panel orderOut:nil]; }
 - (unsigned int)contextLanguage {
     if (self.raw.length && [self.language isEqualToString:@"Chinese"]) return 3;
-    // The latest confirmed language wins over older history for ambiguous input.
+    if (self.raw.length && [self.language isEqualToString:@"Vietnamese"]) return 2;
+    // Retain confirmed context through temporary ambiguous prefixes.
     return self.recentLanguages.lastObject.unsignedIntValue;
 }
 - (void)rememberLanguage {
@@ -170,13 +172,103 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
     [client setMarkedText:self.preedit selectionRange:NSMakeRange(self.preedit.length, 0) replacementRange:currentRange()];
     [self showCandidates:client];
 }
+static NSString *shortMeaning(NSString *gloss) {
+    NSString *first = [[gloss componentsSeparatedByString:@";"] firstObject];
+    first = [first stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (first.length > 72) {
+        NSRange range = [first rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 69)];
+        first = [[first substringWithRange:range] stringByAppendingString:@"…"];
+    }
+    return first;
+}
+// Keep whole-word glosses; otherwise annotate individual words/characters, not a sentence translation.
+- (NSString *)meaningForCandidate:(NSString *)candidate {
+    NSInteger mode = [NSUserDefaults.standardUserDefaults integerForKey:@"ChineseMeaningLanguage"];
+    if (mode != 1 && mode != 2) return nil;
+    if (!self.meanings) {
+        // Share the large immutable dictionary across all app input controllers.
+        static NSDictionary *sharedMeanings;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            NSURL *url = [NSBundle.mainBundle URLForResource:@"chinese-meanings" withExtension:@"json"];
+            NSData *data = url ? [NSData dataWithContentsOfURL:url] : nil;
+            sharedMeanings = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : @{};
+        });
+        self.meanings = sharedMeanings;
+    }
+    NSString *key = mode == 1 ? @"vi" : @"en";
+    NSString *meaning = self.meanings[candidate][key];
+    if (meaning.length) return shortMeaning(meaning);
+    NSMutableArray<NSString *> *characters = [NSMutableArray new];
+    [candidate enumerateSubstringsInRange:NSMakeRange(0, candidate.length)
+        options:NSStringEnumerationByComposedCharacterSequences
+        usingBlock:^(NSString *substring, NSRange range, NSRange enclosingRange, BOOL *stop) {
+            [characters addObject:substring];
+        }];
+    NSMutableArray<NSString *> *parts = [NSMutableArray new];
+    for (NSUInteger offset = 0; offset < characters.count;) {
+        BOOL found = NO;
+        // Longest dictionary word first; a single character is the final fallback.
+        for (NSUInteger length = characters.count - offset; length > 0; length--) {
+            NSString *word = [[characters subarrayWithRange:NSMakeRange(offset, length)] componentsJoinedByString:@""];
+            NSString *gloss = self.meanings[word][key];
+            if (!gloss.length) continue;
+            // Short first senses keep sentence annotations readable while typing.
+            NSString *shortGloss = shortMeaning(gloss);
+            [parts addObject:[NSString stringWithFormat:@"%@: %@", word, shortGloss]];
+            offset += length;
+            found = YES;
+            break;
+        }
+        if (!found) offset++; // Unknown characters/punctuation have no placeholder.
+    }
+    return parts.count ? [parts componentsJoinedByString:@" · "] : nil;
+}
+- (NSString *)candidateLabelAtIndex:(NSUInteger)index number:(NSUInteger)number {
+    NSString *candidate = self.choices[index];
+    NSString *meaning = [self.language isEqualToString:@"Chinese"] ? [self meaningForCandidate:candidate] : nil;
+    return meaning ? [NSString stringWithFormat:@"%lu  %@ — %@", number, candidate, meaning] :
+        [NSString stringWithFormat:@"%lu  %@", number, candidate];
+}
+- (NSAttributedString *)styledCandidateLabelAtIndex:(NSUInteger)index number:(NSUInteger)number {
+    NSString *text = [self candidateLabelAtIndex:index number:number];
+    NSFont *font = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
+    NSMutableAttributedString *label = [[NSMutableAttributedString alloc] initWithString:text
+        attributes:@{NSFontAttributeName: font, NSForegroundColorAttributeName:
+            number == 1 ? NSColor.controlAccentColor : NSColor.labelColor}];
+    NSUInteger prefixLength = [NSString stringWithFormat:@"%lu  %@", number, self.choices[index]].length;
+    if (text.length > prefixLength) {
+        NSFont *meaningFont = [NSFont systemFontOfSize:13 weight:NSFontWeightLight];
+        NSFont *italic = [NSFontManager.sharedFontManager convertFont:meaningFont toHaveTrait:NSItalicFontMask];
+        NSMutableDictionary *attributes = [@{NSFontAttributeName: italic,
+            NSForegroundColorAttributeName: NSColor.secondaryLabelColor} mutableCopy];
+        if (!(italic.fontDescriptor.symbolicTraits & NSFontItalicTrait)) attributes[NSObliquenessAttributeName] = @0.18;
+        [label addAttributes:attributes range:NSMakeRange(prefixLength, text.length - prefixLength)];
+    }
+    return label;
+}
 - (void)showCandidates:(id<IMKTextInput>)client {
     BOOL hasChoices = self.choices.count > 0;
     CGFloat width = hasChoices ? 396 : (self.correction ? 310 : 214);
     if (self.languageOptions.count > 1) width = MAX(width, 310);
     NSUInteger start = self.page * 9;
     NSUInteger count = MIN(9, self.choices.count - MIN(start, self.choices.count));
+    NSInteger meaningMode = [NSUserDefaults.standardUserDefaults integerForKey:@"ChineseMeaningLanguage"];
+    BOOL showMeanings = hasChoices && [self.language isEqualToString:@"Chinese"] && (meaningMode == 1 || meaningMode == 2);
+    if (showMeanings) width = 520;
+    NSMutableArray<NSAttributedString *> *candidateLabels = [NSMutableArray new];
+    NSMutableArray<NSNumber *> *rowHeights = [NSMutableArray new];
     CGFloat height = hasChoices ? 32 + ((count + 2) / 3) * 24 : 30;
+    if (showMeanings) height = 32;
+    for (NSUInteger i = 0; i < count; i++) {
+        NSAttributedString *text = [self styledCandidateLabelAtIndex:start + i number:i + 1];
+        [candidateLabels addObject:text];
+        NSRect textBounds = [text boundingRectWithSize:NSMakeSize(width - 18, CGFLOAT_MAX)
+            options:NSStringDrawingUsesLineFragmentOrigin];
+        CGFloat rowHeight = MAX(24, MIN(62, ceil(textBounds.size.height) + 6));
+        [rowHeights addObject:@(rowHeight)];
+        if (showMeanings) height += rowHeight;
+    }
     if (!self.panel) {
         self.panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, width, height) styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel backing:NSBackingStoreBuffered defer:NO];
         self.panel.level = NSPopUpMenuWindowLevel;
@@ -217,13 +309,23 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
     self.status.frame = NSMakeRect(6, height - 24, width - 12, 18);
     self.status.lineBreakMode = NSLineBreakByTruncatingTail;
     self.panel.accessibilityLabel = self.status.stringValue;
+    CGFloat rowTop = height - 28;
     for (NSUInteger i = 0; i < count; i++) {
-        NSTextField *item = [NSTextField labelWithString:[NSString stringWithFormat:@"%lu  %@", i + 1, self.choices[start + i]]];
-        item.font = [NSFont systemFontOfSize:15 weight:i == 0 ? NSFontWeightSemibold : NSFontWeightRegular];
-        item.textColor = i == 0 ? NSColor.controlAccentColor : NSColor.labelColor;
+        NSTextField *item = [NSTextField labelWithString:@""];
+        item.attributedStringValue = candidateLabels[i];
         item.lineBreakMode = NSLineBreakByTruncatingTail;
-        item.toolTip = self.choices[start + i];
-        item.frame = NSMakeRect(6 + (i % 3) * 128, height - 50 - (i / 3) * 24, 124, 22);
+        item.toolTip = item.stringValue;
+        item.accessibilityLabel = item.stringValue;
+        CGFloat rowHeight = rowHeights[i].doubleValue;
+        if (showMeanings) {
+            item.lineBreakMode = NSLineBreakByWordWrapping;
+            item.maximumNumberOfLines = 3;
+            item.cell.wraps = YES;
+            item.cell.scrollable = NO;
+        }
+        item.frame = showMeanings ? NSMakeRect(6, rowTop - rowHeight, width - 12, rowHeight - 2) :
+            NSMakeRect(6 + (i % 3) * 128, height - 50 - (i / 3) * 24, 124, 22);
+        rowTop -= rowHeight;
         [self.panel.contentView addSubview:item];
     }
     NSRect caret = NSZeroRect;
@@ -368,6 +470,12 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
     [d setBool:![d boolForKey:@"Autocorrect"] forKey:@"Autocorrect"];
     [self refresh:self.client];
 }
+- (void)selectChineseMeaningLanguage:(NSDictionary *)sender {
+    NSMenuItem *item = sender[(NSString *)kIMKCommandMenuItemName];
+    if (!item || item.tag < 0 || item.tag > 2) return;
+    [NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"ChineseMeaningLanguage"];
+    [self showCandidates:self.client];
+}
 - (NSMenu *)menu {
     NSMenu *menu = [NSMenu new];
     NSMenuItem *automatic = [menu addItemWithTitle:@"Automatically detect language" action:@selector(toggleAutomatic:) keyEquivalent:@""];
@@ -376,6 +484,13 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
     correct.state = [NSUserDefaults.standardUserDefaults boolForKey:@"Autocorrect"] ? NSControlStateValueOn : NSControlStateValueOff;
     NSMenuItem *learn = [menu addItemWithTitle:@"Learn Chinese candidate choices (local)" action:@selector(toggleChineseLearning:) keyEquivalent:@""];
     learn.state = [NSUserDefaults.standardUserDefaults boolForKey:@"LearnChinese"] ? NSControlStateValueOn : NSControlStateValueOff;
+    [menu addItem:NSMenuItem.separatorItem];
+    NSArray *meaningNames = @[@"Nghĩa từ tiếng Trung: Tắt", @"Nghĩa từ tiếng Trung: Tiếng Việt", @"Chinese word meanings: English"];
+    for (NSUInteger i = 0; i < meaningNames.count; i++) {
+        NSMenuItem *item = [menu addItemWithTitle:meaningNames[i] action:@selector(selectChineseMeaningLanguage:) keyEquivalent:@""];
+        item.tag = i;
+        item.state = [NSUserDefaults.standardUserDefaults integerForKey:@"ChineseMeaningLanguage"] == (NSInteger)i ? NSControlStateValueOn : NSControlStateValueOff;
+    }
     [menu addItem:NSMenuItem.separatorItem];
     NSArray *names = @[@"English", @"Vietnamese — Telex", @"Chinese — Pinyin (Simplified)"];
     for (NSUInteger i = 0; i < names.count; i++) {
@@ -393,7 +508,7 @@ static OSStatus switchLanguage(EventHandlerCallRef next, EventRef event, void *c
 int main(void) {
     @autoreleasepool {
         [NSApplication sharedApplication];
-        [NSUserDefaults.standardUserDefaults registerDefaults:@{@"AutomaticDetection": @YES, @"Autocorrect": @YES, @"LearnChinese": @YES, @"Language": @1}];
+        [NSUserDefaults.standardUserDefaults registerDefaults:@{@"AutomaticDetection": @YES, @"Autocorrect": @YES, @"LearnChinese": @YES, @"Language": @1, @"ChineseMeaningLanguage": @0}];
         NSString *shared = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"rime"];
         NSString *user = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/KeyIn/Rime"];
         [KeyInRime startWithSharedData:shared userData:user];

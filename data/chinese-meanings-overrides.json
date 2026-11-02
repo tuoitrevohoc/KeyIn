@@ -1,0 +1,514 @@
+{
+  "你好": {
+    "vi": "xin chào",
+    "en": "hello"
+  },
+  "您好": {
+    "vi": "xin chào (kính ngữ)",
+    "en": "hello (polite)"
+  },
+  "谢谢": {
+    "vi": "cảm ơn",
+    "en": "thank you"
+  },
+  "再见": {
+    "vi": "tạm biệt",
+    "en": "goodbye"
+  },
+  "对不起": {
+    "vi": "xin lỗi",
+    "en": "sorry"
+  },
+  "没关系": {
+    "vi": "không sao",
+    "en": "it does not matter"
+  },
+  "不客气": {
+    "vi": "không có gì",
+    "en": "you are welcome"
+  },
+  "请": {
+    "vi": "mời; xin",
+    "en": "please"
+  },
+  "是": {
+    "vi": "là; đúng",
+    "en": "to be; yes"
+  },
+  "不是": {
+    "vi": "không phải",
+    "en": "is not"
+  },
+  "有": {
+    "vi": "có",
+    "en": "to have; there is"
+  },
+  "没有": {
+    "vi": "không có",
+    "en": "not have; there is not"
+  },
+  "不": {
+    "vi": "không",
+    "en": "not"
+  },
+  "我": {
+    "vi": "tôi",
+    "en": "I; me"
+  },
+  "你": {
+    "vi": "bạn",
+    "en": "you"
+  },
+  "您": {
+    "vi": "ngài; bạn (kính ngữ)",
+    "en": "you (polite)"
+  },
+  "他": {
+    "vi": "anh ấy",
+    "en": "he; him"
+  },
+  "她": {
+    "vi": "cô ấy",
+    "en": "she; her"
+  },
+  "它": {
+    "vi": "nó",
+    "en": "it"
+  },
+  "我们": {
+    "vi": "chúng tôi; chúng ta",
+    "en": "we; us"
+  },
+  "你们": {
+    "vi": "các bạn",
+    "en": "you (plural)"
+  },
+  "他们": {
+    "vi": "họ",
+    "en": "they; them"
+  },
+  "这": {
+    "vi": "này; đây",
+    "en": "this"
+  },
+  "那": {
+    "vi": "kia; đó",
+    "en": "that"
+  },
+  "什么": {
+    "vi": "cái gì",
+    "en": "what"
+  },
+  "谁": {
+    "vi": "ai",
+    "en": "who"
+  },
+  "哪里": {
+    "vi": "ở đâu",
+    "en": "where"
+  },
+  "哪儿": {
+    "vi": "ở đâu",
+    "en": "where"
+  },
+  "为什么": {
+    "vi": "tại sao",
+    "en": "why"
+  },
+  "怎么": {
+    "vi": "thế nào; làm sao",
+    "en": "how"
+  },
+  "怎么样": {
+    "vi": "thế nào",
+    "en": "how; how about"
+  },
+  "多少": {
+    "vi": "bao nhiêu",
+    "en": "how much; how many"
+  },
+  "几": {
+    "vi": "mấy; bao nhiêu",
+    "en": "how many; a few"
+  },
+  "吗": {
+    "vi": "trợ từ nghi vấn",
+    "en": "question particle"
+  },
+  "呢": {
+    "vi": "trợ từ hỏi hoặc tiếp nối",
+    "en": "question or continuation particle"
+  },
+  "了": {
+    "vi": "trợ từ chỉ hoàn thành hoặc thay đổi",
+    "en": "completion or change particle"
+  },
+  "的": {
+    "vi": "của; trợ từ định ngữ",
+    "en": "possessive or modifying particle"
+  },
+  "好": {
+    "vi": "tốt; khỏe",
+    "en": "good; well"
+  },
+  "很好": {
+    "vi": "rất tốt",
+    "en": "very good"
+  },
+  "可以": {
+    "vi": "có thể; được phép",
+    "en": "can; may"
+  },
+  "会": {
+    "vi": "biết; sẽ",
+    "en": "can; will"
+  },
+  "能": {
+    "vi": "có thể",
+    "en": "can; be able to"
+  },
+  "想": {
+    "vi": "muốn; nghĩ; nhớ",
+    "en": "want; think; miss"
+  },
+  "要": {
+    "vi": "muốn; cần",
+    "en": "want; need"
+  },
+  "喜欢": {
+    "vi": "thích",
+    "en": "to like"
+  },
+  "爱": {
+    "vi": "yêu",
+    "en": "love"
+  },
+  "知道": {
+    "vi": "biết",
+    "en": "to know"
+  },
+  "认识": {
+    "vi": "quen biết; nhận ra",
+    "en": "to know someone; recognize"
+  },
+  "学习": {
+    "vi": "học tập",
+    "en": "to study; learn"
+  },
+  "中文": {
+    "vi": "tiếng Trung",
+    "en": "Chinese language"
+  },
+  "汉语": {
+    "vi": "tiếng Hán",
+    "en": "Chinese language"
+  },
+  "英语": {
+    "vi": "tiếng Anh",
+    "en": "English language"
+  },
+  "越南语": {
+    "vi": "tiếng Việt",
+    "en": "Vietnamese language"
+  },
+  "中国": {
+    "vi": "Trung Quốc",
+    "en": "China"
+  },
+  "越南": {
+    "vi": "Việt Nam",
+    "en": "Vietnam"
+  },
+  "美国": {
+    "vi": "Hoa Kỳ",
+    "en": "United States"
+  },
+  "北京": {
+    "vi": "Bắc Kinh",
+    "en": "Beijing"
+  },
+  "朋友": {
+    "vi": "bạn bè",
+    "en": "friend"
+  },
+  "老师": {
+    "vi": "giáo viên",
+    "en": "teacher"
+  },
+  "学生": {
+    "vi": "học sinh; sinh viên",
+    "en": "student"
+  },
+  "学校": {
+    "vi": "trường học",
+    "en": "school"
+  },
+  "工作": {
+    "vi": "công việc; làm việc",
+    "en": "work; job"
+  },
+  "公司": {
+    "vi": "công ty",
+    "en": "company"
+  },
+  "家": {
+    "vi": "nhà; gia đình",
+    "en": "home; family"
+  },
+  "人": {
+    "vi": "người",
+    "en": "person"
+  },
+  "名字": {
+    "vi": "tên",
+    "en": "name"
+  },
+  "今天": {
+    "vi": "hôm nay",
+    "en": "today"
+  },
+  "明天": {
+    "vi": "ngày mai",
+    "en": "tomorrow"
+  },
+  "昨天": {
+    "vi": "hôm qua",
+    "en": "yesterday"
+  },
+  "现在": {
+    "vi": "bây giờ",
+    "en": "now"
+  },
+  "时间": {
+    "vi": "thời gian",
+    "en": "time"
+  },
+  "时候": {
+    "vi": "lúc; thời điểm",
+    "en": "time; moment"
+  },
+  "年": {
+    "vi": "năm",
+    "en": "year"
+  },
+  "月": {
+    "vi": "tháng; mặt trăng",
+    "en": "month; moon"
+  },
+  "日": {
+    "vi": "ngày; mặt trời",
+    "en": "day; sun"
+  },
+  "天": {
+    "vi": "ngày; trời",
+    "en": "day; sky"
+  },
+  "早上": {
+    "vi": "buổi sáng",
+    "en": "morning"
+  },
+  "晚上": {
+    "vi": "buổi tối",
+    "en": "evening"
+  },
+  "吃": {
+    "vi": "ăn",
+    "en": "to eat"
+  },
+  "喝": {
+    "vi": "uống",
+    "en": "to drink"
+  },
+  "水": {
+    "vi": "nước",
+    "en": "water"
+  },
+  "茶": {
+    "vi": "trà",
+    "en": "tea"
+  },
+  "咖啡": {
+    "vi": "cà phê",
+    "en": "coffee"
+  },
+  "米饭": {
+    "vi": "cơm",
+    "en": "cooked rice"
+  },
+  "饭": {
+    "vi": "cơm; bữa ăn",
+    "en": "rice; meal"
+  },
+  "去": {
+    "vi": "đi",
+    "en": "to go"
+  },
+  "来": {
+    "vi": "đến",
+    "en": "to come"
+  },
+  "回": {
+    "vi": "trở về",
+    "en": "to return"
+  },
+  "看": {
+    "vi": "nhìn; xem; đọc",
+    "en": "to look; watch; read"
+  },
+  "听": {
+    "vi": "nghe",
+    "en": "to listen"
+  },
+  "说": {
+    "vi": "nói",
+    "en": "to speak"
+  },
+  "读": {
+    "vi": "đọc",
+    "en": "to read"
+  },
+  "写": {
+    "vi": "viết",
+    "en": "to write"
+  },
+  "买": {
+    "vi": "mua",
+    "en": "to buy"
+  },
+  "卖": {
+    "vi": "bán",
+    "en": "to sell"
+  },
+  "钱": {
+    "vi": "tiền",
+    "en": "money"
+  },
+  "多": {
+    "vi": "nhiều",
+    "en": "many; much"
+  },
+  "少": {
+    "vi": "ít",
+    "en": "few; little"
+  },
+  "大": {
+    "vi": "lớn",
+    "en": "big"
+  },
+  "小": {
+    "vi": "nhỏ",
+    "en": "small"
+  },
+  "很": {
+    "vi": "rất",
+    "en": "very"
+  },
+  "也": {
+    "vi": "cũng",
+    "en": "also"
+  },
+  "都": {
+    "vi": "đều; tất cả",
+    "en": "all; both"
+  },
+  "和": {
+    "vi": "và; với",
+    "en": "and; with"
+  },
+  "在": {
+    "vi": "ở; đang",
+    "en": "at; in; action in progress"
+  },
+  "一": {
+    "vi": "một",
+    "en": "one"
+  },
+  "二": {
+    "vi": "hai",
+    "en": "two"
+  },
+  "三": {
+    "vi": "ba",
+    "en": "three"
+  },
+  "四": {
+    "vi": "bốn",
+    "en": "four"
+  },
+  "五": {
+    "vi": "năm",
+    "en": "five"
+  },
+  "六": {
+    "vi": "sáu",
+    "en": "six"
+  },
+  "七": {
+    "vi": "bảy",
+    "en": "seven"
+  },
+  "八": {
+    "vi": "tám",
+    "en": "eight"
+  },
+  "九": {
+    "vi": "chín",
+    "en": "nine"
+  },
+  "十": {
+    "vi": "mười",
+    "en": "ten"
+  },
+  "再": {
+    "vi": "lại; nữa",
+    "en": "again"
+  },
+  "见": {
+    "vi": "gặp; thấy",
+    "en": "to meet; see"
+  },
+  "高兴": {
+    "vi": "vui vẻ",
+    "en": "happy"
+  },
+  "漂亮": {
+    "vi": "đẹp",
+    "en": "beautiful"
+  },
+  "天气": {
+    "vi": "thời tiết",
+    "en": "weather"
+  },
+  "热": {
+    "vi": "nóng",
+    "en": "hot"
+  },
+  "冷": {
+    "vi": "lạnh",
+    "en": "cold"
+  },
+  "忙": {
+    "vi": "bận",
+    "en": "busy"
+  },
+  "累": {
+    "vi": "mệt",
+    "en": "tired"
+  },
+  "睡觉": {
+    "vi": "ngủ",
+    "en": "to sleep"
+  },
+  "电脑": {
+    "vi": "máy tính",
+    "en": "computer"
+  },
+  "手机": {
+    "vi": "điện thoại di động",
+    "en": "mobile phone"
+  },
+  "你好了吗": {
+    "vi": "bạn đã khỏe/chữa xong chưa? (tùy ngữ cảnh)",
+    "en": "are you better/done yet? (context dependent)"
+  }
+}

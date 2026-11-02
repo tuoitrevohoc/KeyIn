@@ -9,7 +9,7 @@ time, in a demonstration layout (not a TextEdit screen recording). It shows
 English, Vietnamese Telex, Chinese Pinyin, and contextual initials.
 Reproduce it after building with `./scripts/record-demo.sh` (requires FFmpeg).
 
-**Status:** experimental 0.2 source release · **License:** LGPL-3.0-or-later
+**Status:** experimental 0.3 source release · **License:** LGPL-3.0-or-later
 
 ## Overview
 
@@ -179,3 +179,30 @@ for that language. The explicit choice remains for this word while editing;
 Space/Return commits it and updates language context, then Auto resumes for the
 next word. Escape retains the raw text. Up/Down pass through to the application
 when no composition or no alternatives exist; manual mode is unchanged.
+
+### Chinese word meanings
+
+In the KeyIn input menu, choose **Nghĩa từ tiếng Trung: Tiếng Việt** or
+**Chinese word meanings: English** to show a gloss beside each Chinese candidate
+while typing. Choose **Nghĩa từ tiếng Trung: Tắt** to restore the compact grid
+(the default). The selection is saved; number keys and Space still insert only
+Chinese text.
+
+Lookup is offline using `data/chinese-meanings.json`: 125,353 distinct simplified
+headwords, with 119,046 Vietnamese glosses and 121,593 English glosses. Sources
+are CVDICT (Phong Phan) and CC-CEDICT (MDBG and contributors), with curated KeyIn
+overrides. The dictionary data is distributed under CC BY-SA 4.0; see
+[data sources and limitations](data/README.chinese-meanings.md).
+
+CVDICT is largely AI-translated with partial manual review and can contain errors.
+Unknown words have no placeholder. When a phrase has no exact dictionary entry,
+KeyIn displays separate glosses for its words (longest match first), falling back
+to individual characters. Unknown segments are skipped. These labeled glosses
+are reading aids, not a translation of the whole sentence. Candidate rows wrap
+to three lines; full text remains available to accessibility tools.
+
+In Auto mode, a valid Vietnamese reading takes precedence over an ambiguous
+English word when the current typing context is Vietnamese (`its` → `ít`).
+Unambiguous English input can still switch languages. Chinese glosses use a
+smaller, light italic font and show the first sense (up to 72 characters) for
+compact reading; sentence annotations retain separate word labels.

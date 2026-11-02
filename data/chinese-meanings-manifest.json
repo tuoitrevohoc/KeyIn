@@ -1,0 +1,17 @@
+{
+  "en": {
+    "sha256": "e203bbf4a28c2ab54762e9b1fb813e53aa9112939704e71a5117f3b3555a46cb",
+    "source_entries": 125356,
+    "unique_simplified_words": 121590
+  },
+  "vi": {
+    "sha256": "4dde4b204193efa9c192d7f7daeab1bb579c8ccd7c41ed90d1b6caee22ba0948",
+    "source_entries": 122597,
+    "unique_simplified_words": 119044
+  },
+  "output": {
+    "words": 125353,
+    "vi": 119046,
+    "en": 121593
+  }
+}

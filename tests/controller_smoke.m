@@ -43,6 +43,40 @@ int main(int argc, const char **argv) { @autoreleasepool {
     controller.rime = [KeyInRime new]; controller.recentLanguages = [NSMutableArray new];
     controller.fake = client;
     check(controller != nil, @"controller init");
+    NSString *meaningPath = [[@(argv[1]) stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"chinese-meanings.json"];
+    controller.meanings = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:meaningPath] options:0 error:nil];
+    check(controller.meanings.count > 120000, @"bundled bilingual dictionary");
+    for (NSDictionary *entry in controller.meanings.allValues)
+        check([entry[@"vi"] length] || [entry[@"en"] length], @"at least one translation present");
+    for (NSString *word in @[@"图书馆", @"环境", @"经济", @"人工智能", @"旅游", @"医院"])
+        check([controller.meanings[word][@"vi"] length] && [controller.meanings[word][@"en"] length], @"expanded vocabulary in both languages");
+    type(controller, @"nihao");
+    NSArray *originalChoices = controller.choices.copy;
+    NSString *originalMarked = client.marked.copy;
+    for (NSInteger mode = 0; mode <= 2; mode++) {
+        NSMenuItem *item = [NSMenuItem new]; item.tag = mode;
+        [controller selectChineseMeaningLanguage:@{(NSString *)kIMKCommandMenuItemName: item}];
+        NSString *label = [controller candidateLabelAtIndex:0 number:1];
+        check([label isEqualToString:@[@"1  你好", @"1  你好 — xin chào", @"1  你好 — hello"][mode]], @"meaning language selection");
+        check([controller.choices isEqual:originalChoices] && [client.marked isEqual:originalMarked], @"meaning selection preserves composition and order");
+    }
+    check([controller meaningForCandidate:@"🫠"] == nil, @"unknown characters have no placeholder");
+    NSDictionary *dictionary = controller.meanings;
+    controller.meanings = @{@"我": @{@"en": @"I; me", @"vi": @"tôi"},
+        @"学习": @{@"en": @"study", @"vi": @"học"}, @"中文": @{@"en": @"Chinese", @"vi": @"tiếng Trung"},
+        @"学": @{@"en": @"learn"}, @"𠮷": @{@"en": @"lucky"}};
+    check([[controller meaningForCandidate:@"我学习中文！"] isEqualToString:@"我: I · 学习: study · 中文: Chinese"], @"sentence splits into longest words and characters");
+    check([[controller meaningForCandidate:@"𠮷🫠我"] isEqualToString:@"𠮷: lucky · 我: I"], @"Unicode characters and unknown segments");
+    NSMenuItem *meaningItem = [NSMenuItem new]; meaningItem.tag = 1;
+    [controller selectChineseMeaningLanguage:@{(NSString *)kIMKCommandMenuItemName: meaningItem}];
+    check([[controller meaningForCandidate:@"我学习中文"] isEqualToString:@"我: tôi · 学习: học · 中文: tiếng Trung"], @"Vietnamese sentence annotations");
+    controller.choices = @[@"🫠"];
+    check([[controller candidateLabelAtIndex:0 number:1] isEqualToString:@"1  🫠"], @"unknown candidate has no empty separator");
+    controller.choices = originalChoices;
+    controller.meanings = dictionary;
+    type(controller, @" ");
+    check([client.committed isEqualToString:@"你好"], @"meanings are never inserted");
+    [client.committed setString:@""];
     type(controller, @"nihao ");
     check([client.committed isEqualToString:@"你好"], @"Chinese commit via controller");
     type(controller, @"ni");
@@ -52,6 +86,10 @@ int main(int argc, const char **argv) { @autoreleasepool {
     check([controller.language isEqualToString:@"Vietnamese"], @"switch to Vietnamese");
     check([client.marked isEqualToString:@"nhưng"], @"Telex preedit");
     type(controller, @" ");
+    type(controller, @"its");
+    check([client.marked isEqualToString:@"ít"], @"Vietnamese context resolves its to ít");
+    type(controller, @" ");
+    check([client.committed hasSuffix:@"ít"], @"Vietnamese ambiguous word commits");
     type(controller, @"hello");
     check([controller.language isEqualToString:@"English"], @"switch to English");
     [controller finish:controller.raw.copy client:(id)client];
