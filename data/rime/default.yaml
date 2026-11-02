@@ -1,0 +1,8 @@
+config_version: '1'
+schema_list:
+  - schema: keyin_pinyin
+  - schema: keyin_pinyin_private
+menu:
+  page_size: 9
+switcher:
+  hotkeys: []
