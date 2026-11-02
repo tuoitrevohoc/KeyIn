@@ -116,6 +116,12 @@ and `KEYIN_INSTALLER_IDENTITY` (Developer ID Installer) to sign it, and
 `KEYIN_NOTARY_PROFILE` (a `notarytool store-credentials` profile) to notarize
 and staple it. Without them the package is unsigned.
 
+### Windows (experimental)
+
+A Text Services Framework port built from the same Rust engine lives in
+[`windows/`](windows/README.md). `./windows/build.ps1` produces an x64 MSI, and the
+`Windows` workflow builds it on every push.
+
 ## Typing
 
 - **English:** words compose inline. Common words are protected from Telex.
@@ -209,9 +215,13 @@ signed for this Mac. There is no claim of complete sentence understanding.
 - `native/KeyInRime.m`: Rime lifecycle, isolated sessions, candidates and selection.
 - `native/main.m`: InputMethodKit event routing, context, marked text and panel.
 - `src/lib.rs`: Telex, context-aware detection, conservative correction and fallback.
+- `src/controller.rs`, `src/rime.rs`, `src/meanings.rs`: platform-neutral key handling,
+  librime binding and meaning lookup, used by the Windows port.
+- `windows/`: TSF text service, candidate window, settings and MSI packaging.
 - `data/rime/`: learning and non-learning schemas; source dictionary stays in `data/`.
 - `scripts/bundle-rime.py`: dependency packaging, licenses and minimum OS checks.
-- `tests/`: native integration harnesses.
+- `tests/`: native integration harnesses; `tests/rime_engine.rs` drives the Rust
+  controller against a real librime when `KEYIN_RIME_LIB` / `KEYIN_RIME_SHARED` are set.
 
 ## Dictionary attribution and license
 

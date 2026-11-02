@@ -1,0 +1,20 @@
+<!-- Per-machine installer: files under Program Files\KeyIn; the DLL self-registers its
+     COM class, TSF input profile (Vietnamese) and categories, and unregisters on removal. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="KeyIn" Manufacturer="KeyIn" Version="$(var.Version)"
+           UpgradeCode="F0795A83-5C61-4C2C-83C0-B5EBB6A4922C" Scope="perMachine" Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of KeyIn is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="KeyIn" />
+    </StandardDirectory>
+    <Feature Id="Main">
+      <Component Directory="INSTALLFOLDER">
+        <File Source="$(var.SourceDir)\keyin_tsf.dll" SelfRegCost="1" />
+      </Component>
+      <Files Directory="INSTALLFOLDER" Include="$(var.SourceDir)\**">
+        <Exclude Files="$(var.SourceDir)\keyin_tsf.dll" />
+      </Files>
+    </Feature>
+  </Package>
+</Wix>

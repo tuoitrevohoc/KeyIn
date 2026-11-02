@@ -1,0 +1,40 @@
+[package]
+name = "keyin-tsf"
+version = "0.4.0"
+edition = "2021"
+license = "LGPL-3.0-or-later"
+description = "KeyIn Text Services Framework (TSF) input method for Windows"
+
+# Built separately from the engine so macOS/iOS builds never resolve Windows crates.
+[workspace]
+
+[lib]
+name = "keyin_tsf"
+crate-type = ["cdylib"]
+
+[dependencies]
+keyin = { path = ".." }
+
+[target.'cfg(windows)'.dependencies]
+windows-core = "0.58"
+windows = { version = "0.58", features = [
+    "implement",
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_SystemServices",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_TextServices",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
