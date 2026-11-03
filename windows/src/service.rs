@@ -16,12 +16,11 @@ use windows::{
         Foundation::{BOOL, HWND, LPARAM, RECT, WPARAM},
         UI::{
             Input::KeyboardAndMouse::{
-                GetKeyState, GetKeyboardState, MapVirtualKeyW, SendInput, ToUnicode, INPUT,
-                INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
-                MAPVK_VK_TO_VSC, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DOWN, VK_END,
-                VK_ESCAPE, VK_HOME, VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU,
-                VK_RCONTROL, VK_RETURN, VK_RIGHT, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT, VK_SPACE,
-                VK_TAB, VK_UP,
+                GetKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+                KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL,
+                VK_DOWN, VK_END, VK_ESCAPE, VK_HOME, VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT,
+                VK_LWIN, VK_MENU, VK_RCONTROL, VK_RETURN, VK_RIGHT, VK_RMENU, VK_RSHIFT, VK_RWIN,
+                VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
             },
             TextServices::{
                 ITfComposition, ITfCompositionSink, ITfCompositionSink_Impl, ITfContext,
@@ -107,8 +106,48 @@ fn pressed(key: VIRTUAL_KEY) -> bool {
     (unsafe { GetKeyState(key.0 as i32) }) < 0
 }
 
+/// The character a key types on a US QWERTY keyboard. Telex and Pinyin are defined on
+/// QWERTY positions, and the Vietnamese profile's own Windows layout would turn the
+/// number row into ă â ê…, so KeyIn reads keys itself instead of using the active layout.
+fn us_char(vk: u16, shift: bool) -> Option<char> {
+    let caps = unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 1 != 0;
+    let pick = |plain: char, shifted: char| Some(if shift { shifted } else { plain });
+    match vk {
+        0x41..=0x5a => {
+            let c = vk as u8 as char;
+            Some(if shift != caps {
+                c
+            } else {
+                c.to_ascii_lowercase()
+            })
+        }
+        0x30..=0x39 => {
+            let digit = (vk - 0x30) as usize;
+            pick(b"0123456789"[digit] as char, b")!@#$%^&*("[digit] as char)
+        }
+        0x60..=0x69 => Some((b'0' + (vk - 0x60) as u8) as char),
+        0x6a => Some('*'),
+        0x6b => Some('+'),
+        0x6d => Some('-'),
+        0x6e => Some('.'),
+        0x6f => Some('/'),
+        0xba => pick(';', ':'),
+        0xbb => pick('=', '+'),
+        0xbc => pick(',', '<'),
+        0xbd => pick('-', '_'),
+        0xbe => pick('.', '>'),
+        0xbf => pick('/', '?'),
+        0xc0 => pick('`', '~'),
+        0xdb => pick('[', '{'),
+        0xdc => pick('\\', '|'),
+        0xdd => pick(']', '}'),
+        0xde => pick('\'', '"'),
+        _ => None,
+    }
+}
+
 /// Translates a virtual key; `None` for modifier keys, which never affect composition.
-fn key_event(wparam: WPARAM, lparam: LPARAM) -> Option<KeyEvent> {
+fn key_event(wparam: WPARAM) -> Option<KeyEvent> {
     let vk = VIRTUAL_KEY(wparam.0 as u16);
     let key = match vk {
         VK_SHIFT | VK_LSHIFT | VK_RSHIFT | VK_CONTROL | VK_LCONTROL | VK_RCONTROL | VK_MENU
@@ -124,28 +163,7 @@ fn key_event(wparam: WPARAM, lparam: LPARAM) -> Option<KeyEvent> {
         VK_DOWN => Key::Down,
         VK_HOME => Key::Home,
         VK_END => Key::End,
-        _ => {
-            let mut state = [0u8; 256];
-            let mut buffer = [0u16; 4];
-            let scan = ((lparam.0 >> 16) & 0xff) as u32;
-            let scan = if scan == 0 {
-                unsafe { MapVirtualKeyW(vk.0 as u32, MAPVK_VK_TO_VSC) }
-            } else {
-                scan
-            };
-            // Flag 4: do not change the keyboard state (keeps dead keys intact for the app).
-            let count = unsafe {
-                if GetKeyboardState(&mut state).is_err() {
-                    0
-                } else {
-                    ToUnicode(vk.0 as u32, scan, Some(&state), &mut buffer, 4)
-                }
-            };
-            match char::decode_utf16(buffer.iter().copied().take(count.max(0) as usize)).next() {
-                Some(Ok(c)) if count == 1 => Key::Char(c),
-                _ => Key::Other,
-            }
-        }
+        _ => us_char(vk.0, pressed(VK_SHIFT)).map_or(Key::Other, Key::Char),
     };
     Some(KeyEvent {
         key,
@@ -365,8 +383,9 @@ impl TextService {
         let Some(controller) = controller.as_ref() else {
             return false;
         };
-        controller.is_composing()
-            || (!event.shortcut && matches!(event.key, Key::Char(c) if c.is_ascii_alphabetic()))
+        // Idle keys are claimed too when they type a character: letters start a word and
+        // every other character is typed as on QWERTY (see `us_char`).
+        controller.is_composing() || (!event.shortcut && matches!(event.key, Key::Char(_)))
     }
 
     fn edit(&self, context: &ITfContext, action: Action, sync: bool) -> Result<()> {
@@ -520,18 +539,18 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         &self,
         _: Option<&ITfContext>,
         wparam: WPARAM,
-        lparam: LPARAM,
+        _lparam: LPARAM,
     ) -> Result<BOOL> {
-        Ok(self.wants(key_event(wparam, lparam)).into())
+        Ok(self.wants(key_event(wparam)).into())
     }
 
     fn OnKeyDown(
         &self,
         context: Option<&ITfContext>,
         wparam: WPARAM,
-        lparam: LPARAM,
+        _lparam: LPARAM,
     ) -> Result<BOOL> {
-        let event = key_event(wparam, lparam);
+        let event = key_event(wparam);
         let (Some(context), Some(event)) = (context, event) else {
             return Ok(false.into());
         };
