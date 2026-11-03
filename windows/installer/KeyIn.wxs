@@ -5,6 +5,9 @@
            UpgradeCode="F0795A83-5C61-4C2C-83C0-B5EBB6A4922C" Scope="perMachine" Compressed="yes">
     <MajorUpgrade DowngradeErrorMessage="A newer version of KeyIn is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <Icon Id="KeyIn.ico" SourceFile="$(sys.SOURCEFILEDIR)..\assets\keyin.ico" />
+    <!-- Logo in Settings > Apps > Installed apps. -->
+    <Property Id="ARPPRODUCTICON" Value="KeyIn.ico" />
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="KeyIn" />
     </StandardDirectory>
@@ -12,7 +15,7 @@
     <Feature Id="Main">
       <!-- Start menu entry for the settings window (runs outside any host app). -->
       <Component Directory="ProgramMenuFolder">
-        <Shortcut Name="KeyIn Settings" Description="KeyIn input method settings"
+        <Shortcut Name="KeyIn Settings" Description="KeyIn input method settings" Icon="KeyIn.ico"
                   Target="[System64Folder]rundll32.exe"
                   Arguments="&quot;[INSTALLFOLDER]keyin_tsf.dll&quot;,KeyInSettings" />
         <RegistryValue Root="HKLM" Key="Software\KeyIn" Name="SettingsShortcut" Type="integer" Value="1" KeyPath="yes" />

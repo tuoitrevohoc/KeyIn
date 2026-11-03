@@ -14,6 +14,7 @@ crate is only the Windows adapter:
 | `src/settings.rs` | Preferences in `HKCU\Software\KeyIn` |
 | `src/settings_window.rs` | Settings window (`rundll32 keyin_tsf.dll,KeyInSettings`) |
 | `src/register.rs` | `regsvr32` / MSI registration (COM class, TSF profile, categories) |
+| `assets/keyin.svg`, `assets/keyin.ico` | Logo (the macOS input-menu K on brand blue), embedded by `build.rs` |
 | `src/engine.rs` | Loads `rime.dll`, Rime data and the meanings dictionary next to the DLL |
 
 ## Build

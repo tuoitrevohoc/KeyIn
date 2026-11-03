@@ -6,12 +6,6 @@ use windows::{
     core::{implement, IUnknown, Interface, Result, BSTR, GUID},
     Win32::{
         Foundation::{BOOL, E_INVALIDARG, POINT, RECT},
-        Graphics::Gdi::{
-            CreateBitmap, CreateCompatibleDC, CreateDIBSection, CreateFontW, CreateSolidBrush,
-            DeleteDC, DeleteObject, DrawTextW, FillRect, SelectObject, SetBkMode, SetTextColor,
-            BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, DT_CENTER, DT_NOPREFIX,
-            DT_SINGLELINE, DT_VCENTER, FW_BOLD, TRANSPARENT,
-        },
         System::Ole::{CONNECT_E_ADVISELIMIT, CONNECT_E_CANNOTCONNECT, CONNECT_E_NOCONNECTION},
         UI::{
             TextServices::{
@@ -22,7 +16,7 @@ use windows::{
                 TF_LBMENUF_CHECKED,
             },
             WindowsAndMessaging::{
-                CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON,
+                GetSystemMetrics, LoadImageW, HICON, IMAGE_ICON, LR_DEFAULTCOLOR, SM_CXSMICON,
             },
         },
     },
@@ -227,7 +221,7 @@ impl ITfLangBarItemButton_Impl for LangBarButton_Impl {
     }
 
     fn GetIcon(&self) -> Result<HICON> {
-        icon(mode_text(&self.shared.settings()))
+        icon()
     }
 
     fn GetText(&self) -> Result<BSTR> {
@@ -258,80 +252,19 @@ impl ITfSource_Impl for LangBarButton_Impl {
     }
 }
 
-/// Draws the mode label into a small-icon sized bitmap. The caller destroys the icon.
-fn icon(text: &str) -> Result<HICON> {
+/// The KeyIn logo (icon resource 1 in the DLL) at the small-icon size. The caller
+/// destroys it. The active language stays in the button text, tooltip and candidate footer.
+fn icon() -> Result<HICON> {
     let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16);
-    unsafe {
-        let dc = CreateCompatibleDC(None);
-        let info = BITMAPINFO {
-            bmiHeader: BITMAPINFOHEADER {
-                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: size,
-                biHeight: -size,
-                biPlanes: 1,
-                biBitCount: 32,
-                biCompression: BI_RGB.0,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut bits = std::ptr::null_mut();
-        let color = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut bits, None, 0)?;
-        let mask = CreateBitmap(size, size, 1, 1, None);
-        let old = SelectObject(dc, color);
-        let mut rect = RECT {
-            left: 0,
-            top: 0,
-            right: size,
-            bottom: size,
-        };
-        let background = CreateSolidBrush(windows::Win32::Foundation::COLORREF(0x00e8_731a));
-        FillRect(dc, &rect, background);
-        let font = CreateFontW(
-            -(size * 3 / 4),
-            0,
-            0,
-            0,
-            FW_BOLD.0 as i32,
-            0,
-            0,
-            0,
-            1,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            0,
-            windows::core::w!("Microsoft YaHei UI"),
-        );
-        let old_font = SelectObject(dc, font);
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, windows::Win32::Foundation::COLORREF(0x00ff_ffff));
-        let mut label: Vec<u16> = text.encode_utf16().collect();
-        DrawTextW(
-            dc,
-            &mut label,
-            &mut rect,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-        );
-        // GDI leaves alpha at zero; make every pixel opaque.
-        let pixels = std::slice::from_raw_parts_mut(bits as *mut u32, (size * size) as usize);
-        for pixel in pixels {
-            *pixel |= 0xff00_0000;
-        }
-        SelectObject(dc, old_font);
-        SelectObject(dc, old);
-        let icon = CreateIconIndirect(&ICONINFO {
-            fIcon: true.into(),
-            xHotspot: 0,
-            yHotspot: 0,
-            hbmMask: mask,
-            hbmColor: color,
-        });
-        let _ = DeleteObject(font);
-        let _ = DeleteObject(background);
-        let _ = DeleteObject(color);
-        let _ = DeleteObject(mask);
-        let _ = DeleteDC(dc);
-        icon
-    }
+    let handle = unsafe {
+        LoadImageW(
+            crate::module(),
+            crate::ICON_RESOURCE,
+            IMAGE_ICON,
+            size,
+            size,
+            LR_DEFAULTCOLOR,
+        )?
+    };
+    Ok(HICON(handle.0))
 }
