@@ -1,6 +1,7 @@
 // node render.mjs sheet [offset]   one frame per beat -> qa/sheet.png
 // node render.mjs at 1.2 3.4 ...    single frames -> qa/at_<t>.png
 // node render.mjs full              every frame, muxed with out/score.wav -> out/KeyIn_Promo_1920x1080.mp4
+// node render.mjs gif               the full render as a 960px 15 fps loop -> out/KeyIn_Promo.gif (README)
 import { chromium } from '/Users/banhtieu/Projects/CatSort/motion-studio/node_modules/playwright/index.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -32,6 +33,11 @@ if (mode === 'sheet') {
   console.log('sheet -> qa/sheet.png');
 } else if (mode === 'at') {
   for (const s of rest) { writeFileSync(join(here, 'qa', `at_${s}.png`), await frame(Number(s))); console.log(`qa/at_${s}.png`); }
+} else if (mode === 'gif') {
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', join(here, 'out', `KeyIn_Promo_${W}x${H}.mp4`), '-filter_complex',
+    'fps=15,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff:max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
+    '-loop', '0', join(here, 'out', 'KeyIn_Promo.gif')]);
+  console.log('gif -> out/KeyIn_Promo.gif');
 } else if (mode === 'full') {
   const out = join(here, 'out', 'video_noaudio.mp4');
   const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'image2pipe', '-framerate', String(EDL.fps), '-i', '-',
