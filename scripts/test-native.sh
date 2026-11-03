@@ -12,6 +12,8 @@ rime_test_dir=$(mktemp -d /tmp/keyin-rime-test.XXXXXX)
 # Reopen the same user dictionary in a new process.
 ./build/rime-smoke "$shared" "$rime_test_dir"
 ./build/controller-smoke "$shared" "$(mktemp -d /tmp/keyin-controller-test.XXXXXX)"
+# The platform-neutral Rust controller (used by the Windows port) against the same librime.
+KEYIN_RIME_LIB="$frameworks/librime.1.dylib" KEYIN_RIME_SHARED="$shared" cargo test --release --test rime_engine
 codesign --verify --deep --strict build/KeyIn.app
 python3 - <<'PY'
 from pathlib import Path

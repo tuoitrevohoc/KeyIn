@@ -5,6 +5,10 @@ use std::{
     sync::OnceLock,
 };
 
+pub mod controller;
+pub mod meanings;
+pub mod rime;
+
 fn spelling_key(text: &str) -> String {
     // Treat hòa/hoà and thủy/thuỷ alike without discarding the tone itself.
     let mut tone = 0;
@@ -389,7 +393,7 @@ pub fn compose(raw: &str, mode: u32) -> String {
     compose_with_context(raw, mode, 0)
 }
 
-fn compose_with_context(raw: &str, mode: u32, previous: u32) -> String {
+pub(crate) fn compose_with_context(raw: &str, mode: u32, previous: u32) -> String {
     let key = raw.to_ascii_lowercase();
     let vietnamese = telex(raw);
     let english = [
@@ -453,7 +457,7 @@ fn compose_with_context(raw: &str, mode: u32, previous: u32) -> String {
 
 /// Conservative boundary correction: known English typos and a unique adjacent
 /// key transposition validated against Vietnamese / Pinyin dictionaries.
-fn correction(raw: &str, mode: u32) -> Option<String> {
+pub(crate) fn correction(raw: &str, mode: u32) -> Option<String> {
     if !(3..=32).contains(&raw.len()) || !raw.is_ascii() {
         return None;
     }
@@ -529,7 +533,7 @@ pub unsafe extern "C" fn keyin_correct(raw: *const c_char, mode: u32) -> *mut c_
 
 /// Languages available for explicit selection: bits 1 English, 2 Vietnamese,
 /// 3 Chinese. Literal input is always available; manual modes remain unrestricted.
-fn language_options(raw: &str) -> u32 {
+pub(crate) fn language_options(raw: &str) -> u32 {
     if raw.is_empty() {
         return 0;
     }
