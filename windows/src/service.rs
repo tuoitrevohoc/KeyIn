@@ -16,11 +16,12 @@ use windows::{
         Foundation::{BOOL, HWND, LPARAM, RECT, WPARAM},
         UI::{
             Input::KeyboardAndMouse::{
-                GetKeyState, GetKeyboardState, MapVirtualKeyW, ToUnicode, MAPVK_VK_TO_VSC,
-                VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DOWN, VK_END, VK_ESCAPE, VK_HOME,
-                VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU, VK_RCONTROL,
-                VK_RETURN, VK_RIGHT, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT, VK_SPACE, VK_TAB,
-                VK_UP,
+                GetKeyState, GetKeyboardState, MapVirtualKeyW, SendInput, ToUnicode, INPUT,
+                INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
+                MAPVK_VK_TO_VSC, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DOWN, VK_END,
+                VK_ESCAPE, VK_HOME, VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU,
+                VK_RCONTROL, VK_RETURN, VK_RIGHT, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT, VK_SPACE,
+                VK_TAB, VK_UP,
             },
             TextServices::{
                 ITfComposition, ITfCompositionSink, ITfCompositionSink_Impl, ITfContext,
@@ -51,6 +52,7 @@ pub struct Inner {
     pub langbar_sink: RefCell<Option<ITfLangBarItemSink>>,
     client_id: Cell<u32>,
     eaten: Cell<bool>,
+    replay: Cell<bool>,
 }
 
 impl Inner {
@@ -152,6 +154,23 @@ fn key_event(wparam: WPARAM, lparam: LPARAM) -> Option<KeyEvent> {
     })
 }
 
+/// Sends a key press again after the composition was committed. Held modifiers stay
+/// down, so Ctrl+C after a word still copies.
+fn replay(wparam: WPARAM) {
+    let key = |flags| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(wparam.0 as u16),
+                dwFlags: flags,
+                ..Default::default()
+            },
+        },
+    };
+    let inputs = [key(KEYBD_EVENT_FLAGS(0)), key(KEYEVENTF_KEYUP)];
+    unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) };
+}
+
 #[implement(ITfEditSession)]
 struct EditSession {
     shared: Shared,
@@ -168,8 +187,21 @@ impl ITfEditSession_Impl for EditSession_Impl {
             let Some(controller) = controller.as_mut() else {
                 return Ok(());
             };
+            // Keys that finish a word and also mean something to the app (punctuation,
+            // Enter, shortcuts) are still eaten: once TSF has claimed a key, legacy apps
+            // never see it. The character is typed here, any other key is replayed.
+            let mut typed = None;
             let eaten = match self.action {
-                Action::Key(event) => controller.handle_key(event),
+                Action::Key(event) => {
+                    if !controller.handle_key(event) {
+                        match event.key {
+                            Key::Char(c) if !event.shortcut && !c.is_control() => typed = Some(c),
+                            Key::Space if !event.shortcut => typed = Some(' '),
+                            _ => self.shared.replay.set(true),
+                        }
+                    }
+                    true
+                }
                 Action::Commit => {
                     controller.commit_composition();
                     false
@@ -180,7 +212,7 @@ impl ITfEditSession_Impl for EditSession_Impl {
             if settings_changed {
                 settings::save(&controller.settings);
             }
-            (self.apply(ec, controller), settings_changed)
+            (self.apply(ec, controller, typed), settings_changed)
         };
         // The taskbar reads settings back synchronously, so notify only after the borrow ends.
         if settings_changed {
@@ -218,8 +250,10 @@ impl EditSession {
     }
 
     /// Applies the controller's output: commit first, then the live composition.
-    fn apply(&self, ec: u32, controller: &mut Controller) -> Result<()> {
-        let output = controller.take_output();
+    /// `typed` is a character to insert right after the committed word.
+    fn apply(&self, ec: u32, controller: &mut Controller, typed: Option<char>) -> Result<()> {
+        let mut output = controller.take_output();
+        output.commit.extend(typed);
         let mut composition = self.shared.composition.borrow_mut();
         if !output.commit.is_empty() {
             let text = wide(&output.commit);
@@ -314,6 +348,7 @@ impl TextService {
                 langbar_sink: RefCell::new(None),
                 client_id: Cell::new(0),
                 eaten: Cell::new(false),
+                replay: Cell::new(false),
             }),
             thread_mgr: RefCell::new(None),
             thread_mgr_cookie: Cell::new(0),
@@ -505,8 +540,12 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
             return Ok(false.into());
         }
         self.shared.eaten.set(false);
+        self.shared.replay.set(false);
         self.edit(context, Action::Key(event), true)?;
-        // Not eaten: the composition was committed and the key now goes to the app.
+        if self.shared.replay.take() {
+            // The word is committed and KeyIn is idle, so the replayed key reaches the app.
+            replay(wparam);
+        }
         Ok(self.shared.eaten.get().into())
     }
 
