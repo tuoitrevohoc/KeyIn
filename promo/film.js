@@ -3,6 +3,26 @@
 const stage = document.getElementById('stage');
 const EDL = globalThis.EDL, TR = globalThis.TRACE, SC = EDL.scenes, CUT = EDL.cut;
 const ACC = '#007AFF', INK = '#141414';
+// Layouts: 'h' is the 1920x1080 cut, 'v' the 1080x1920 cut for TikTok/Reels (content kept
+// clear of the top 200px and bottom 380px that the apps cover).
+const V = new URLSearchParams(location.search).get('fmt') === 'v';
+const LY = V ? {
+  W: 1080, H: 1920, head: { x: 70, y: 300, size: 76, w: 940 }, band: 570,
+  hook: { ys: [540, 870, 1200], size: 140, tagBelow: true },
+  S: 1.75, WX: 70, WY: 660, winW: 540, macH: 270, wndH: 230, strip: { y: 1300, n: 15 }, zoomC: [560, 920],
+  tab: { key: [70, 1230], word: [70, 660], panel: [70, 960, 1.4] },
+  local: { x: 70, y: 560, dy: 290, size: 100, w: 940 },
+  end: { mark: [60, 450, 300], word: [370, 472, 200], sub: [76, 840, 66, 930], chips: [76, 1050], url: [76, 1160, 112], gh: [80, 1310, 36] },
+} : {
+  W: 1920, H: 1080, head: { x: 120, y: 62, size: 64, w: 0 }, band: 180,
+  hook: { ys: [205, 455, 705], size: 150, tagBelow: false },
+  S: 2.5, WX: 185, WY: 196, winW: 620, macH: 215, wndH: 230, strip: { y: 815, n: 22 }, zoomC: [860, 420],
+  tab: { key: [110, 540], word: [560, 350], panel: [560, 650, 1.95] },
+  local: { x: 150, y: 250, dy: 200, size: 116, w: 0 },
+  end: { mark: [150, 200, 330], word: [510, 228, 230], sub: [156, 600, 64, 0], chips: [156, 722], url: [156, 836, 84], gh: [160, 950, 34] },
+};
+stage.style.width = LY.W + 'px'; stage.style.height = LY.H + 'px';
+const wrapCss = w => w ? `white-space:normal;width:${w}px;` : '';
 const LANG = { VI: { flag: '🇻🇳', name: 'Tiếng Việt', color: '#1FA2B8' }, EN: { flag: '🇺🇸', name: 'English', color: '#007AFF' },
   '简中': { flag: '🇨🇳', name: '中文', color: '#FF8A00' } };
 
@@ -45,8 +65,8 @@ function state(id, t) {
 
 // ---------- headlines: words pop up on their beat, leave upward ----------
 const HEADS = [];
-function head(t0, t1, words, x = 120, y = 62, size = 64) {
-  const h = el('div', 'hd', stage, `left:${x}px;top:${y}px;font-size:${size}px`);
+function head(t0, t1, words, x = LY.head.x, y = LY.head.y, size = LY.head.size, w = LY.head.w) {
+  const h = el('div', 'hd', stage, `left:${x}px;top:${y}px;font-size:${size}px;${wrapCss(w)}`);
   const ws = words.map(w => typeof w === 'string'
     ? el('span', 'w' + (w.startsWith('*') ? ' acc' : ''), h, '', esc(w.replace(/^\*/, '')))
     : el('span', 'w', h, 'vertical-align:12%', `<span class="chip on" style="position:relative;font-size:28px;padding:8px 22px 10px">${w.chip}</span>`));
@@ -74,12 +94,16 @@ function paintHeads(t) {
 
 // ---------- hook: three words typed live through the engine ----------
 const HOOK = [
-  { id: 'hook1', y: 205, commit: 0.75, lang: 'VI' },
-  { id: 'hook2', y: 455, commit: 1.25, lang: 'EN' },
-  { id: 'hook3', y: 705, commit: 2.0, lang: '简中' },
+  { id: 'hook1', y: LY.hook.ys[0], commit: 0.75, lang: 'VI' },
+  { id: 'hook2', y: LY.hook.ys[1], commit: 1.25, lang: 'EN' },
+  { id: 'hook3', y: LY.hook.ys[2], commit: 2.0, lang: '简中' },
 ].map(h => {
-  const box = el('div', 'hk', stage, `top:${h.y}px`);
-  return { ...h, box, txt: el('span', 'txt', box), raw: el('div', 'raw', box), tag: el('div', 'tag', box) };
+  const box = el('div', 'hk', stage, `top:${h.y}px;left:${LY.head.x + 30}px`);
+  box.style.fontSize = '1px';
+  const parts = { txt: el('span', 'txt', box, `font-size:${LY.hook.size}px`), raw: el('div', 'raw', box), tag: el('div', 'tag', box) };
+  // Portrait: the language tag sits under the word, the raw keys under the tag.
+  if (LY.hook.tagBelow) { parts.tag.style.top = (LY.hook.size + 18) + 'px'; parts.raw.style.top = (LY.hook.size + 108) + 'px'; }
+  return { ...h, box, ...parts };
 });
 function paintHook(t) {
   HOOK.forEach((h, i) => {
@@ -96,33 +120,33 @@ function paintHook(t) {
     const L = LANG[h.lang];
     setHTML(h.tag, `${L.flag} ${L.name}`);
     h.tag.style.background = L.color;
-    h.tag.style.left = (h.txt.offsetWidth + 44) + 'px';
+    h.tag.style.left = LY.hook.tagBelow ? '0px' : (h.txt.offsetWidth + 44) + 'px';
     const u = seg(t, h.commit, h.commit + 0.3, E.outBack);
     show(h.tag, done);
     xf(h.tag, `scale(${0.4 + 0.6 * u}) rotate(${(1 - u) * -8}deg)`);
     xf(h.txt, `translateY(${punch(t, h.commit, -14)}px)`);
     h.txt.style.display = 'inline-block';
     const out = seg(t, 2.8 + i * 0.06, 3.15 + i * 0.06, E.in);
-    xf(h.box, `translateY(${-out * 1100}px)`);
+    xf(h.box, `translateY(${-out * LY.H}px)`);
   });
 }
 
 // ---------- windows ----------
-const S = 2.5, WX = 185, WY = 196;
-const cam = el('div', 'cam');
-const band = el('div', 'abs', stage, 'width:1920px;height:180px;background:linear-gradient(#F4F2ED 78%, rgba(244,242,237,0));z-index:4');
+const { S, WX, WY } = LY;
+const cam = el('div', 'cam', stage, `width:${LY.W}px;height:${LY.H}px`);
+const band = el('div', 'abs', stage, `width:${LY.W}px;height:${LY.band}px;background:linear-gradient(#F4F2ED 78%, rgba(244,242,237,0));z-index:4`);
 function macWindow() {
-  const w = el('div', 'win mac', cam);
+  const w = el('div', 'win mac', cam, `width:${LY.winW}px;height:${LY.macH}px`);
   const bar = el('div', 'bar', w);
   [['#FF5F57', 12], ['#FEBC2E', 32], ['#28C840', 52]].forEach(([c, x]) => el('div', 'tl', bar, `left:${x}px;background:${c}`));
   el('div', 'title', bar, '', 'Không tên — Đã sửa');
   return { w, doc: el('div', 'doc', w), panel: el('div', 'mp', w), docX: 26, docY: 52, line: 42 };
 }
 function winWindow() {
-  const w = el('div', 'win wnd', cam);
+  const w = el('div', 'win wnd', cam, `width:${LY.winW}px;height:${LY.wndH}px`);
   const bar = el('div', 'bar', w);
   el('div', 'tab', bar, '', 'Không tên<b>✕</b>');
-  [['─', 518], ['☐', 556], ['✕', 592]].forEach(([g, x]) => el('div', 'ctl', bar, `left:${x}px`, g));
+  [['─', LY.winW - 102], ['☐', LY.winW - 64], ['✕', LY.winW - 28]].forEach(([g, x]) => el('div', 'ctl', bar, `left:${x}px`, g));
   el('div', 'menu', w, '', 'Tệp Sửa Xem');
   el('div', 'status', w, '', 'UTF-8 &nbsp; Windows (CRLF) &nbsp; 100%');
   return { w, doc: el('div', 'doc', w), panel: el('div', 'wp', w), docX: 16, docY: 80, line: 38 };
@@ -158,14 +182,14 @@ function paintDoc(W, id, t, panelOf) {
   setHTML(W.panel, p.html);
   const anc = W.doc.querySelector('.anc');
   let x = W.docX + anc.offsetLeft - 8, y = W.docY + anc.offsetTop + W.line + 2;
-  x = Math.min(x, 620 + 40 - W.panel.offsetWidth);
+  x = Math.max(-WX / S + 4, Math.min(x, LY.winW + 40 - W.panel.offsetWidth));
   W.panel.style.left = x + 'px'; W.panel.style.top = y + 'px';
   return { x, y, w: W.panel.offsetWidth, h: W.panel.offsetHeight };
 }
 
 // ---------- key strip: the physical keys, so Telex and Pinyin stay readable ----------
-const strip = el('div', 'keys', stage, `left:${WX}px;top:815px`);
-const caps = Array.from({ length: 22 }, () => el('div', 'kc', strip));
+const strip = el('div', 'keys', stage, `left:${WX}px;top:${LY.strip.y}px`);
+const caps = Array.from({ length: LY.strip.n }, () => el('div', 'kc', strip));
 function paintKeys(id, t, alpha) {
   show(strip, alpha > 0);
   if (alpha <= 0) return;
@@ -185,11 +209,11 @@ function paintKeys(id, t, alpha) {
 
 // ---------- tab close-up ----------
 const TAB = (() => {
-  const box = el('div', 'abs', stage, 'width:1920px;height:1080px');
-  const key = el('div', 'big-tab', box, 'left:110px;top:540px', 'Tab<span>⇥</span>');
-  const word = el('div', 'hd', box, 'left:560px;top:350px;font-size:190px;font-weight:700');
-  const tag = el('div', 'tag', box, 'position:absolute;top:416px;font:700 48px SFP;padding:10px 26px 12px;border-radius:999px;color:#fff;white-space:nowrap');
-  const pw = el('div', 'abs', box, 'left:560px;top:650px;transform-origin:0 0;transform:scale(1.95)');
+  const box = el('div', 'abs', stage, `width:${LY.W}px;height:${LY.H}px`);
+  const key = el('div', 'big-tab', box, `left:${LY.tab.key[0]}px;top:${LY.tab.key[1]}px`, 'Tab<span>⇥</span>');
+  const word = el('div', 'hd', box, `left:${LY.tab.word[0]}px;top:${LY.tab.word[1]}px;font-size:190px;font-weight:700`);
+  const tag = el('div', 'tag', box, `top:${LY.tab.word[1] + 66}px;` + 'position:absolute;font:700 48px SFP;padding:10px 26px 12px;border-radius:999px;color:#fff;white-space:nowrap');
+  const pw = el('div', 'abs', box, `left:${LY.tab.panel[0]}px;top:${LY.tab.panel[1]}px;transform-origin:0 0;transform:scale(${LY.tab.panel[2]})`);
   const panel = el('div', 'mp', pw, 'position:relative');
   return { box, key, word, tag, panel };
 })();
@@ -199,7 +223,7 @@ function paintTab(t) {
   if (!on) return;
   const s = state('tab', t), tabs = SC.tab.keys.filter(k => k.ch === '\t');
   const inU = seg(t, CUT.tab, CUT.tab + 0.4, E.outQuint), out = seg(t, CUT.local - 0.25, CUT.local, E.in);
-  xf(TAB.box, `translateY(${(1 - inU) * 300 - out * 1100}px)`);
+  xf(TAB.box, `translateY(${(1 - inU) * 300 - out * LY.H}px)`);
   op(TAB.box, inU);
   const press = tabs.find(k => t >= k.t && t - k.t < 0.18);
   TAB.key.className = 'big-tab' + (press ? ' hot' : '');
@@ -209,7 +233,7 @@ function paintTab(t) {
   const L = LANG[s.lang];
   setHTML(TAB.tag, `${L.flag} ${L.name}`);
   TAB.tag.style.background = L.color;
-  TAB.tag.style.left = (560 + TAB.word.offsetWidth + 50) + 'px';
+  TAB.tag.style.left = (LY.tab.word[0] + TAB.word.offsetWidth + 50) + 'px';
   const u = lastTab ? seg(t, lastTab.t, lastTab.t + 0.3, E.outBack) : seg(t, SC.tab.keys[0].t, SC.tab.keys[0].t + 0.3, E.outBack);
   show(TAB.tag, !!s.pre);
   xf(TAB.tag, `scale(${0.5 + 0.5 * u}) rotate(${(1 - u) * -8}deg)`);
@@ -221,22 +245,22 @@ function paintTab(t) {
 
 // ---------- on-device statements ----------
 const LOCAL = [['Nhanh,', '*chạy', '*ngay', '*trên', '*máy.'], ['Không', 'cần', '*mạng.'], ['Không', 'gửi', 'dữ', 'liệu', '*đi', '*đâu.']]
-  .map((ws, i) => { const y = 250 + i * 200; const n = HEADS.length; head(CUT.local + i * 0.5, CUT.end - 0.15, ws, 150, y, 116); return HEADS[n]; });
+  .map((ws, i) => { const n = HEADS.length; head(CUT.local + i * 0.5, CUT.end - 0.15, ws, LY.local.x, LY.local.y + i * LY.local.dy, LY.local.size, LY.local.w); return HEADS[n]; });
 
 // ---------- end card ----------
 const END = (() => {
-  const box = el('div', 'abs', stage, 'width:1920px;height:1080px');
-  const mark = el('div', 'abs', box, 'left:150px;top:200px;width:330px;height:330px', `<svg viewBox="80 60 350 390" width="330" height="330">
+  const N = LY.end, box = el('div', 'abs', stage, `width:${LY.W}px;height:${LY.H}px`);
+  const mark = el('div', 'abs', box, `left:${N.mark[0]}px;top:${N.mark[1]}px`, `<svg viewBox="80 60 350 390" width="${N.mark[2]}" height="${N.mark[2]}">
     <rect id="kb" x="114" y="86" width="56" height="340" fill="${INK}"/>
     <polygon id="kt" points="328,86 398,86 328,165 243,256 328,350 398,426 328,426" fill="${ACC}"/></svg>`);
-  const word = el('div', 'hd', box, 'left:510px;top:228px;font-size:230px;letter-spacing:-0.04em', 'KeyIn');
-  const sub = el('div', 'hd', box, 'left:156px;top:600px;font-size:64px;font-weight:700', 'Bộ gõ <span class="acc">Anh · Việt · Trung</span> trong một.');
-  const chips = el('div', 'abs', box, 'left:156px;top:722px');
+  const word = el('div', 'hd', box, `left:${N.word[0]}px;top:${N.word[1]}px;font-size:${N.word[2]}px;letter-spacing:-0.04em`, 'KeyIn');
+  const sub = el('div', 'hd', box, `left:${N.sub[0]}px;top:${N.sub[1]}px;font-size:${N.sub[2]}px;font-weight:700;${wrapCss(N.sub[3])}`, 'Bộ gõ <span class="acc">Anh · Việt · Trung</span> trong một.');
+  const chips = el('div', 'abs', box, `left:${N.chips[0]}px;top:${N.chips[1]}px`);
   const c1 = el('div', 'chip on', chips, 'position:relative;display:inline-block;margin-right:18px', 'macOS');
   const c2 = el('div', 'chip on', chips, 'position:relative;display:inline-block;margin-right:18px', 'Windows');
   const c3 = el('div', 'chip', chips, 'position:relative;display:inline-block', 'Miễn phí · Mã nguồn mở');
-  const url = el('div', 'hd', box, 'left:156px;top:836px;font-size:84px;color:#007AFF', 'getkeyin.app');
-  const gh = el('div', 'hd', box, 'left:160px;top:950px;font-size:34px;font-weight:600;color:#6d6a63', 'github.com/<span style="color:#141414">tuoitrevohoc/KeyIn</span>');
+  const url = el('div', 'hd', box, `left:${N.url[0]}px;top:${N.url[1]}px;font-size:${N.url[2]}px;color:#007AFF`, 'getkeyin.app');
+  const gh = el('div', 'hd', box, `left:${N.gh[0]}px;top:${N.gh[1]}px;font-size:${N.gh[2]}px;font-weight:600;color:#6d6a63`, 'github.com/<span style="color:#141414">tuoitrevohoc/KeyIn</span>');
   return { box, kb: mark.querySelector('#kb'), kt: mark.querySelector('#kt'), word, sub, c: [c1, c2, c3], url, gh };
 })();
 function paintEnd(t) {
@@ -269,7 +293,7 @@ function paintWindows(t) {
   let anchor = null;
   if (macOn) {
     const up = seg(t, CUT.mac, CUT.mac + 0.5, E.outQuint), out = seg(t, CUT.win, CUT.win + 0.45, E.in);
-    xf(MAC.w, `translate(${WX - out * 1900}px,${WY + (1 - up) * 950}px) rotate(${(1 - up) * 3}deg) scale(${S})`);
+    xf(MAC.w, `translate(${WX - out * 1900}px,${WY + (1 - up) * LY.H * 0.88}px) rotate(${(1 - up) * 3}deg) scale(${S})`);
     anchor = paintDoc(MAC, 'mac', t, s => macPanel(s, true));
   }
   if (winOn) {
@@ -281,7 +305,7 @@ function paintWindows(t) {
   const z = seg(t, CUT.zoom, CUT.zoom + 0.5, E.inOut) * (1 - seg(t, 10.95, 11.4, E.inOut));
   if (z > 0 && anchor) {
     const fx = WX + (anchor.x + 150) * S, fy = WY + anchor.y * S, Z = 1 + 0.45 * z;
-    const cx = lerp(fx, 860, z), cy = lerp(fy, 420, z);
+    const cx = lerp(fx, LY.zoomC[0], z), cy = lerp(fy, LY.zoomC[1], z);
     xf(cam, `translate(${cx - fx * Z}px,${cy - fy * Z}px) scale(${Z})`);
   } else xf(cam, 'none');
   // Paper band keeps the headline readable over the zoomed window.
