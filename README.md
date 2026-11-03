@@ -4,19 +4,10 @@
 
 [![KeyIn 30-second promo](docs/media/keyin-promo.gif)](docs/media/keyin-promo.mp4)
 
-A 30-second promo for macOS and Windows (Vietnamese captions). Click it for the
-full-resolution video with sound.
-Every keystroke, candidate and meaning in it comes from the real engine;
-`promo/` renders it (see `promo/CLAUDE.md`).
-
-![KeyIn animated typing demo](docs/media/keyin-demo.gif)
-
-A screen recording of KeyIn in TextEdit (idle pauses shortened, slightly sped
-up). Everything is typed in Auto mode with no switching key: Telex becomes
-Vietnamese, English stays English, Pinyin turns into Chinese, and Chinese
-candidates show their meanings (here in English) while you choose.
-`./scripts/record-demo.sh` renders a scripted, non-screen-recorded version
-after building (requires FFmpeg).
+A 30-second promo for macOS and Windows (Vietnamese captions); click it for the
+full-resolution video with sound. Everything is typed in Auto mode with no
+switching key, and every keystroke, candidate and meaning comes from the real
+engine; `promo/` renders it (see `promo/CLAUDE.md`).
 
 **Status:** experimental 0.4 preview · **License:** LGPL-3.0-or-later
 
