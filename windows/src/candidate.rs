@@ -9,9 +9,10 @@ use windows::{
         Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
         Graphics::Gdi::{
             BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject, DrawTextW,
-            EndPaint, GetDC, GetTextExtentPoint32W, Rectangle, ReleaseDC, RoundRect, SelectObject,
-            SetBkMode, SetTextColor, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, FW_NORMAL,
-            FW_SEMIBOLD, HDC, HFONT, HGDIOBJ, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+            EndPaint, GetDC, GetStockObject, GetTextExtentPoint32W, Rectangle, ReleaseDC,
+            RoundRect, SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE,
+            DT_VCENTER, FW_NORMAL, FW_SEMIBOLD, HDC, HFONT, NULL_PEN, PAINTSTRUCT, PS_SOLID,
+            TRANSPARENT,
         },
         UI::WindowsAndMessaging::{
             CreateWindowExW, DefWindowProcW, DestroyWindow, GetSystemMetrics, RegisterClassW,
@@ -28,16 +29,16 @@ const FOOTER_HEIGHT: i32 = 24;
 const GAP: i32 = 4;
 
 struct Item {
-    label: Vec<u16>,
-    meaning: Vec<u16>,
+    label: String,
+    meaning: String,
     rect: RECT,
 }
 
 #[derive(Default)]
 struct Layout {
     items: Vec<Item>,
-    badge: Vec<u16>,
-    hints: Vec<u16>,
+    badge: String,
+    hints: String,
     language: Option<Language>,
     width: i32,
     height: i32,
@@ -46,10 +47,6 @@ struct Layout {
 thread_local! {
     // TSF calls a text service on its thread only, so each thread draws its own window.
     static LAYOUT: RefCell<Layout> = RefCell::new(Layout::default());
-}
-
-fn wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().collect()
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
@@ -64,7 +61,55 @@ fn badge_color(language: Option<Language>) -> COLORREF {
     }
 }
 
-fn font(height: i32, weight: u32) -> HFONT {
+/// Which font draws a character: Arial for Latin and Vietnamese (its diacritics stay
+/// legible), Microsoft YaHei UI for Chinese, Segoe UI Symbol for anything else (⇧).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Script {
+    Latin,
+    Chinese,
+    Symbol,
+}
+
+fn script(c: char) -> Script {
+    match c as u32 {
+        0..=0x024f | 0x0300..=0x036f | 0x1e00..=0x1eff | 0x2000..=0x206f | 0x2190..=0x2193 => {
+            Script::Latin
+        }
+        0x2e80..=0x9fff | 0xf900..=0xfaff | 0xfe30..=0xfe4f | 0xff00..=0xffef | 0x20000.. => {
+            Script::Chinese
+        }
+        _ => Script::Symbol,
+    }
+}
+
+/// Splits text into runs that share a font.
+fn runs(text: &str) -> Vec<(Script, Vec<u16>)> {
+    let mut runs: Vec<(Script, Vec<u16>)> = Vec::new();
+    for c in text.chars() {
+        let kind = script(c);
+        let mut units = [0u16; 2];
+        let encoded = c.encode_utf16(&mut units);
+        match runs.last_mut() {
+            Some((last, run)) if *last == kind || c == ' ' => run.extend_from_slice(encoded),
+            _ => runs.push((kind, encoded.to_vec())),
+        }
+    }
+    runs
+}
+
+fn measure(dc: HDC, text: &[u16]) -> i32 {
+    let mut size = SIZE::default();
+    let _ = unsafe { GetTextExtentPoint32W(dc, text, &mut size) };
+    size.cx
+}
+
+struct Fonts {
+    latin: HFONT,
+    chinese: HFONT,
+    symbol: HFONT,
+}
+
+fn create_font(height: i32, weight: u32, face: PCWSTR) -> HFONT {
     unsafe {
         CreateFontW(
             -height,
@@ -80,15 +125,65 @@ fn font(height: i32, weight: u32) -> HFONT {
             Default::default(),
             Default::default(),
             0,
-            w!("Microsoft YaHei UI"),
+            face,
         )
     }
 }
 
-fn measure(dc: HDC, text: &[u16]) -> i32 {
-    let mut size = SIZE::default();
-    let _ = unsafe { GetTextExtentPoint32W(dc, text, &mut size) };
-    size.cx
+impl Fonts {
+    fn new(height: i32, weight: u32) -> Fonts {
+        Fonts {
+            latin: create_font(height, weight, w!("Arial")),
+            chinese: create_font(height, weight, w!("Microsoft YaHei UI")),
+            symbol: create_font(height, weight, w!("Segoe UI Symbol")),
+        }
+    }
+
+    fn select(&self, dc: HDC, kind: Script) {
+        let font = match kind {
+            Script::Latin => self.latin,
+            Script::Chinese => self.chinese,
+            Script::Symbol => self.symbol,
+        };
+        unsafe { SelectObject(dc, font) };
+    }
+
+    fn width(&self, dc: HDC, text: &str) -> i32 {
+        runs(text)
+            .iter()
+            .map(|(kind, run)| {
+                self.select(dc, *kind);
+                measure(dc, run)
+            })
+            .sum()
+    }
+
+    /// Draws `text` left-aligned and vertically centred in `rect`, run by run.
+    fn draw(&self, dc: HDC, text: &str, mut rect: RECT) {
+        for (kind, mut run) in runs(text) {
+            self.select(dc, kind);
+            let width = measure(dc, &run);
+            unsafe {
+                DrawTextW(
+                    dc,
+                    &mut run,
+                    &mut rect,
+                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
+                )
+            };
+            rect.left += width;
+        }
+    }
+}
+
+impl Drop for Fonts {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = DeleteObject(self.latin);
+            let _ = DeleteObject(self.chinese);
+            let _ = DeleteObject(self.symbol);
+        }
+    }
 }
 
 pub struct CandidateWindow {
@@ -131,12 +226,13 @@ impl CandidateWindow {
     /// when there is no room.
     pub fn show(&self, panel: &Panel, anchor: RECT) {
         let dc = unsafe { GetDC(self.hwnd) };
-        let regular = font(17, FW_NORMAL.0);
-        let small = font(13, FW_NORMAL.0);
-        let previous = unsafe { SelectObject(dc, regular) };
+        let regular = Fonts::new(17, FW_NORMAL.0);
+        let small = Fonts::new(13, FW_NORMAL.0);
+        let bold = Fonts::new(13, FW_SEMIBOLD.0);
+        let previous = unsafe { SelectObject(dc, regular.latin) };
         let mut layout = Layout {
-            badge: wide(panel.language.badge()),
-            hints: wide(&format!("   {}", panel.hints.join("   "))),
+            badge: panel.language.badge().to_owned(),
+            hints: format!("   {}", panel.hints.join("   ")),
             language: Some(panel.language),
             ..Default::default()
         };
@@ -144,19 +240,13 @@ impl CandidateWindow {
         let mut y = PADDING;
         let mut width = 0;
         for item in &panel.items {
-            let label = wide(&format!("{} {}", item.number, item.text));
-            let meaning = wide(
-                &item
-                    .meaning
-                    .as_ref()
-                    .map(|m| format!("  {m}"))
-                    .unwrap_or_default(),
-            );
-            let label_width = measure(dc, &label);
-            unsafe { SelectObject(dc, small) };
-            let meaning_width = measure(dc, &meaning);
-            unsafe { SelectObject(dc, regular) };
-            let item_width = label_width + meaning_width + 2 * PADDING;
+            let label = format!("{} {}", item.number, item.text);
+            let meaning = item
+                .meaning
+                .as_ref()
+                .map(|m| format!("  {m}"))
+                .unwrap_or_default();
+            let item_width = regular.width(dc, &label) + small.width(dc, &meaning) + 2 * PADDING;
             let rect = if panel.show_meanings {
                 let rect = RECT {
                     left: PADDING,
@@ -186,14 +276,11 @@ impl CandidateWindow {
         if !panel.show_meanings && !layout.items.is_empty() {
             y += ITEM_HEIGHT;
         }
-        unsafe { SelectObject(dc, small) };
         let footer_width =
-            PADDING + measure(dc, &layout.badge) + measure(dc, &layout.hints) + PADDING;
+            PADDING + bold.width(dc, &layout.badge) + small.width(dc, &layout.hints) + PADDING;
         unsafe {
             SelectObject(dc, previous);
             ReleaseDC(self.hwnd, dc);
-            let _ = DeleteObject(regular);
-            let _ = DeleteObject(small);
         }
         layout.width = (width + PADDING).max(footer_width);
         layout.height = y + GAP + FOOTER_HEIGHT;
@@ -239,39 +326,24 @@ fn paint(dc: HDC) {
             let old_brush = SelectObject(dc, background);
             let _ = Rectangle(dc, 0, 0, layout.width, layout.height);
             SetBkMode(dc, TRANSPARENT);
-            let regular = font(17, FW_NORMAL.0);
-            let small = font(13, FW_NORMAL.0);
-            let bold = font(13, FW_SEMIBOLD.0);
-            let old_font = SelectObject(dc, regular);
+            let regular = Fonts::new(17, FW_NORMAL.0);
+            let small = Fonts::new(13, FW_NORMAL.0);
+            let bold = Fonts::new(13, FW_SEMIBOLD.0);
+            let old_font = SelectObject(dc, regular.latin);
             for (index, item) in layout.items.iter().enumerate() {
                 let mut rect = item.rect;
                 if index == 0 {
                     SelectObject(dc, accent);
-                    SelectObject(
-                        dc,
-                        HGDIOBJ(
-                            windows::Win32::Graphics::Gdi::GetStockObject(
-                                windows::Win32::Graphics::Gdi::NULL_PEN,
-                            )
-                            .0,
-                        ),
-                    );
+                    SelectObject(dc, GetStockObject(NULL_PEN));
                     let _ = RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, 12, 12);
                     SetTextColor(dc, rgb(0xff, 0xff, 0xff));
                 } else {
                     SetTextColor(dc, rgb(0x20, 0x20, 0x20));
                 }
                 rect.left += PADDING;
-                let mut label = item.label.clone();
-                DrawTextW(
-                    dc,
-                    &mut label,
-                    &mut rect,
-                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
-                );
+                regular.draw(dc, &item.label, rect);
                 if !item.meaning.is_empty() {
-                    rect.left += measure(dc, &item.label);
-                    SelectObject(dc, small);
+                    rect.left += regular.width(dc, &item.label);
                     SetTextColor(
                         dc,
                         if index == 0 {
@@ -280,56 +352,26 @@ fn paint(dc: HDC) {
                             rgb(0x70, 0x70, 0x70)
                         },
                     );
-                    let mut meaning = item.meaning.clone();
-                    DrawTextW(
-                        dc,
-                        &mut meaning,
-                        &mut rect,
-                        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
-                    );
-                    SelectObject(dc, regular);
+                    small.draw(dc, &item.meaning, rect);
                 }
             }
-            let top = layout.height - FOOTER_HEIGHT;
             let mut footer = RECT {
                 left: PADDING,
-                top,
+                top: layout.height - FOOTER_HEIGHT,
                 right: layout.width - PADDING,
                 bottom: layout.height,
             };
-            SelectObject(dc, bold);
             SetTextColor(dc, badge_color(layout.language));
-            let mut badge = layout.badge.clone();
-            DrawTextW(
-                dc,
-                &mut badge,
-                &mut footer,
-                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
-            );
-            footer.left += measure(dc, &layout.badge);
-            SelectObject(dc, small);
+            bold.draw(dc, &layout.badge, footer);
+            footer.left += bold.width(dc, &layout.badge);
             SetTextColor(dc, rgb(0x70, 0x70, 0x70));
-            let mut hints = layout.hints.clone();
-            DrawTextW(
-                dc,
-                &mut hints,
-                &mut footer,
-                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
-            );
+            small.draw(dc, &layout.hints, footer);
             SelectObject(dc, old_font);
             SelectObject(dc, old_pen);
             SelectObject(dc, old_brush);
-            for object in [
-                regular.into(),
-                small.into(),
-                bold.into(),
-                background.into(),
-                border.into(),
-                accent.into(),
-            ] {
-                let _: HGDIOBJ = object;
-                let _ = DeleteObject(object);
-            }
+            let _ = DeleteObject(background);
+            let _ = DeleteObject(border);
+            let _ = DeleteObject(accent);
         }
     });
 }

@@ -8,7 +8,15 @@
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="KeyIn" />
     </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
     <Feature Id="Main">
+      <!-- Start menu entry for the settings window (runs outside any host app). -->
+      <Component Directory="ProgramMenuFolder">
+        <Shortcut Name="KeyIn Settings" Description="KeyIn input method settings"
+                  Target="[System64Folder]rundll32.exe"
+                  Arguments="&quot;[INSTALLFOLDER]keyin_tsf.dll&quot;,KeyInSettings" />
+        <RegistryValue Root="HKLM" Key="Software\KeyIn" Name="SettingsShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
       <Component Directory="INSTALLFOLDER">
         <File Source="$(var.SourceDir)\keyin_tsf.dll" SelfRegCost="1" />
       </Component>

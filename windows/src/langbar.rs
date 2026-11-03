@@ -1,6 +1,6 @@
 //! Taskbar input-mode button: shows the active language and holds the settings menu.
 //! Left click cycles Auto → EN → VI → 中; the menu mirrors the macOS settings window.
-use crate::{service::Shared, CLSID_KEYIN};
+use crate::{service::Shared, settings_window, CLSID_KEYIN};
 use keyin::controller::Settings;
 use windows::{
     core::{implement, IUnknown, Interface, Result, BSTR, GUID},
@@ -59,6 +59,7 @@ const MENU_AUTOCORRECT: u32 = 30;
 const MENU_LEARN: u32 = 31;
 const MENU_TABS: u32 = 32;
 const MENU_MEANING: u32 = 40; // + 0..=2
+const MENU_SETTINGS: u32 = 50;
 
 fn menu_item(menu: &ITfMenu, id: u32, checked: bool, text: &str) {
     let text: Vec<u16> = text.encode_utf16().collect();
@@ -137,6 +138,7 @@ impl ITfLangBarItemButton_Impl for LangBarButton_Impl {
         let settings = self.shared.settings();
         let mode = settings.mode();
         let enabled = settings.enabled();
+        menu_item(menu, MENU_SETTINGS, false, "Tùy chỉnh…");
         menu_item(menu, MENU_AUTO, mode == 0, "Tự nhận diện ngôn ngữ (Auto)");
         for (index, name) in [
             (1, "Tiếng Anh"),
@@ -195,6 +197,10 @@ impl ITfLangBarItemButton_Impl for LangBarButton_Impl {
     }
 
     fn OnMenuSelect(&self, id: u32) -> Result<()> {
+        if id == MENU_SETTINGS {
+            settings_window::open();
+            return Ok(());
+        }
         self.shared.update_settings(|settings| match id {
             MENU_AUTO => settings.automatic = !settings.automatic,
             id if (MENU_LANGUAGE + 1..=MENU_LANGUAGE + 3).contains(&id) => {

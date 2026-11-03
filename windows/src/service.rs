@@ -1,6 +1,6 @@
 //! The TSF text input processor: receives keys, runs the shared controller inside edit
 //! sessions and mirrors its state into the document's composition.
-use crate::{candidate::CandidateWindow, engine, langbar, settings};
+use crate::{candidate::CandidateWindow, engine, langbar, settings, settings_window};
 use keyin::{
     controller::{Controller, Key, KeyEvent, Settings},
     rime::Session,
@@ -11,9 +11,9 @@ use std::{
     rc::Rc,
 };
 use windows::{
-    core::{implement, ComObjectInterface, Interface, Result, GUID},
+    core::{implement, ComObjectInterface, Interface, Result, BSTR, GUID},
     Win32::{
-        Foundation::{BOOL, LPARAM, RECT, WPARAM},
+        Foundation::{BOOL, HWND, LPARAM, RECT, WPARAM},
         UI::{
             Input::KeyboardAndMouse::{
                 GetKeyState, GetKeyboardState, MapVirtualKeyW, ToUnicode, MAPVK_VK_TO_VSC,
@@ -25,6 +25,7 @@ use windows::{
             TextServices::{
                 ITfComposition, ITfCompositionSink, ITfCompositionSink_Impl, ITfContext,
                 ITfContextComposition, ITfDocumentMgr, ITfEditSession, ITfEditSession_Impl,
+                ITfFnConfigure, ITfFnConfigure_Impl, ITfFunction, ITfFunction_Impl,
                 ITfInsertAtSelection, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr,
                 ITfLangBarItem, ITfLangBarItemButton, ITfLangBarItemMgr, ITfLangBarItemSink,
                 ITfRange, ITfSource, ITfTextInputProcessor, ITfTextInputProcessorEx,
@@ -291,7 +292,9 @@ impl EditSession {
     ITfTextInputProcessor,
     ITfKeyEventSink,
     ITfCompositionSink,
-    ITfThreadMgrEventSink
+    ITfThreadMgrEventSink,
+    ITfFnConfigure,
+    ITfFunction
 )]
 pub struct TextService {
     shared: Shared,
@@ -346,6 +349,25 @@ impl TextService {
         let result =
             unsafe { context.RequestEditSession(self.shared.client_id.get(), &session, flags)? };
         result.ok()
+    }
+
+    /// Picks up changes made in the settings window (another process) between words.
+    fn reload_settings(&self) {
+        let changed = match self.shared.controller.try_borrow_mut() {
+            Ok(mut controller) => match controller.as_mut() {
+                Some(controller) if !controller.is_composing() => {
+                    let settings = settings::load();
+                    let changed = settings != controller.settings;
+                    controller.set_settings(settings);
+                    changed
+                }
+                _ => false,
+            },
+            Err(_) => false,
+        };
+        if changed {
+            self.shared.notify_langbar();
+        }
     }
 
     /// Commits a pending composition when focus moves away from its document.
@@ -478,6 +500,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         let (Some(context), Some(event)) = (context, event) else {
             return Ok(false.into());
         };
+        self.reload_settings();
         if !self.wants(Some(event)) {
             return Ok(false.into());
         }
@@ -536,5 +559,19 @@ impl ITfThreadMgrEventSink_Impl for TextService_Impl {
 
     fn OnPopContext(&self, _: Option<&ITfContext>) -> Result<()> {
         Ok(())
+    }
+}
+
+/// "Options" for KeyIn in Windows language settings opens the settings window.
+impl ITfFnConfigure_Impl for TextService_Impl {
+    fn Show(&self, _: HWND, _: u16, _: *const GUID) -> Result<()> {
+        settings_window::open();
+        Ok(())
+    }
+}
+
+impl ITfFunction_Impl for TextService_Impl {
+    fn GetDisplayName(&self) -> Result<BSTR> {
+        Ok(BSTR::from("KeyIn"))
     }
 }

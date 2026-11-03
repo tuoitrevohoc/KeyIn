@@ -9,9 +9,10 @@ crate is only the Windows adapter:
 | --- | --- |
 | `src/lib.rs` | COM DLL entry points and class factory |
 | `src/service.rs` | `ITfTextInputProcessorEx`, key sink, composition and edit sessions |
-| `src/candidate.rs` | Candidate window (GDI popup that never takes focus) |
+| `src/candidate.rs` | Candidate window (GDI popup that never takes focus; Arial for Latin/Vietnamese, Microsoft YaHei UI for Chinese) |
 | `src/langbar.rs` | Taskbar input-mode button with the settings menu |
 | `src/settings.rs` | Preferences in `HKCU\Software\KeyIn` |
+| `src/settings_window.rs` | Settings window (`rundll32 keyin_tsf.dll,KeyInSettings`) |
 | `src/register.rs` | `regsvr32` / MSI registration (COM class, TSF profile, categories) |
 | `src/engine.rs` | Loads `rime.dll`, Rime data and the meanings dictionary next to the DLL |
 
@@ -36,7 +37,10 @@ the MSIs as artifacts.
 2. **Settings → Time & language → Language & region**: add **Vietnamese** if it is not
    listed, then open its **Language options** and add the **KeyIn** keyboard.
 3. Switch to KeyIn with **Win+Space**. The taskbar button shows `A` (Auto) or the pinned
-   language; left-click cycles Auto → EN → VI → 中, right-click opens the settings menu.
+   language; left-click cycles Auto → EN → VI → 中, right-click opens a quick menu.
+4. Settings (languages, Auto, autocorrect, Tab shortcuts, Chinese learning and meanings)
+   open from **Start → KeyIn Settings**, the quick menu's **Tùy chỉnh…**, or **Options**
+   for the KeyIn keyboard in Windows language settings. Changes apply from the next word.
 
 Typing works as on macOS: Telex for Vietnamese, Pinyin for Chinese, 1–9 / Space to
 choose a candidate, ← → to page, ↑↓ to reinterpret the word, Tab to switch language and

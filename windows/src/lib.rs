@@ -10,6 +10,7 @@ mod langbar;
 mod register;
 mod service;
 mod settings;
+mod settings_window;
 
 use std::ffi::c_void;
 use windows::{
