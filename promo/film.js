@@ -235,8 +235,9 @@ const END = (() => {
   const c1 = el('div', 'chip on', chips, 'position:relative;display:inline-block;margin-right:18px', 'macOS');
   const c2 = el('div', 'chip on', chips, 'position:relative;display:inline-block;margin-right:18px', 'Windows');
   const c3 = el('div', 'chip', chips, 'position:relative;display:inline-block', 'Miễn phí · Mã nguồn mở');
-  const url = el('div', 'hd', box, 'left:156px;top:860px;font-size:46px;font-weight:600;color:#6d6a63', 'github.com/<span style="color:#141414">tuoitrevohoc/KeyIn</span>');
-  return { box, kb: mark.querySelector('#kb'), kt: mark.querySelector('#kt'), word, sub, c: [c1, c2, c3], url };
+  const url = el('div', 'hd', box, 'left:156px;top:836px;font-size:84px;color:#007AFF', 'getkeyin.app');
+  const gh = el('div', 'hd', box, 'left:160px;top:950px;font-size:34px;font-weight:600;color:#6d6a63', 'github.com/<span style="color:#141414">tuoitrevohoc/KeyIn</span>');
+  return { box, kb: mark.querySelector('#kb'), kt: mark.querySelector('#kt'), word, sub, c: [c1, c2, c3], url, gh };
 })();
 function paintEnd(t) {
   const on = t >= CUT.end;
@@ -248,13 +249,15 @@ function paintEnd(t) {
   const k = seg(t, t0 + 0.25, t0 + 0.6, E.outBack);
   END.kt.setAttribute('transform', `translate(328 256) scale(${k}) translate(-328 -256)`);
   const w = seg(t, t0 + 0.5, t0 + 0.85, E.outBack);
-  xf(END.word, `translateX(${(1 - w) * -120}px) scale(${1 + punch(t, t0 + 2.0, 0.04)})`);
+  xf(END.word, `translateX(${(1 - w) * -120}px) scale(1)`);
   op(END.word, clamp((t - t0 - 0.5) * 6));
   const s = seg(t, t0 + 1.0, t0 + 1.35, E.outBack);
   xf(END.sub, `translateY(${(1 - s) * 60}px)`); op(END.sub, clamp((t - t0 - 1.0) * 6));
   END.c.forEach((c, i) => { const a = t0 + 1.5 + i * 0.25, u = seg(t, a, a + 0.3, E.outBack); xf(c, `scale(${u})`); op(c, clamp((t - a) * 8)); });
   const r = seg(t, t0 + 2.0, t0 + 2.35, E.outBack);
-  xf(END.url, `translateY(${(1 - r) * 50}px)`); op(END.url, clamp((t - t0 - 2.0) * 6));
+  xf(END.url, `translateY(${(1 - r) * 50}px) scale(${1 + punch(t, t0 + 2.0, 0.05)})`); op(END.url, clamp((t - t0 - 2.0) * 6));
+  const g = seg(t, t0 + 2.5, t0 + 2.85, E.outBack);
+  xf(END.gh, `translateY(${(1 - g) * 40}px)`); op(END.gh, clamp((t - t0 - 2.5) * 6));
 }
 
 // ---------- scenes with windows ----------
