@@ -157,6 +157,8 @@ pub struct Panel {
     pub items: Vec<PanelItem>,
     pub page: usize,
     pub pages: usize,
+    /// Index in `items` of the highlighted candidate.
+    pub highlight: usize,
     pub show_meanings: bool,
 }
 
@@ -167,6 +169,8 @@ pub struct Controller {
     language: Language,
     choices: Vec<String>,
     page: usize,
+    /// Highlighted candidate on the current page; ↑↓ move it, Space / Return commit it.
+    highlight: usize,
     correction: Option<String>,
     correction_language: Option<Language>,
     rime: Option<Session>,
@@ -196,6 +200,7 @@ impl Controller {
             language: Language::English,
             choices: Vec::new(),
             page: 0,
+            highlight: 0,
             correction: None,
             correction_language: None,
             rime,
@@ -317,11 +322,16 @@ impl Controller {
             return true;
         }
         if !event.shift && matches!(event.key, Key::Up | Key::Down) {
-            if self.step_language(if event.key == Key::Down { 1 } else { -1 }) {
-                return true;
+            let count = self.choices.len();
+            if count == 0 {
+                self.commit_composition();
+                return false;
             }
-            self.commit_composition();
-            return false;
+            let step = if event.key == Key::Down { 1 } else { count - 1 };
+            let next = (self.highlighted_index() + step) % count;
+            self.set_page(next / 9);
+            self.highlight = next % 9;
+            return true;
         }
         if self.using_rime
             && !self.raw.is_empty()
@@ -338,7 +348,7 @@ impl Controller {
                 rime.process_key(key);
             }
             self.rime_editing = true;
-            self.page = 0;
+            self.set_page(0);
             self.render_rime();
             return true;
         }
@@ -360,12 +370,12 @@ impl Controller {
                         };
                     }
                 }
-                self.page = 0;
+                self.set_page(0);
                 self.render_rime();
                 return true;
             }
             self.raw.pop();
-            self.page = 0;
+            self.set_page(0);
             self.refresh();
             return true;
         }
@@ -375,13 +385,15 @@ impl Controller {
         }
         if !self.choices.is_empty() && matches!(event.key, Key::Left | Key::Right) {
             let pages = self.choices.len().div_ceil(9);
-            self.page = (self.page
-                + if event.key == Key::Right {
-                    1
-                } else {
-                    pages - 1
-                })
-                % pages;
+            self.set_page(
+                (self.page
+                    + if event.key == Key::Right {
+                        1
+                    } else {
+                        pages - 1
+                    })
+                    % pages,
+            );
             return true;
         }
         if let Key::Char(c @ '1'..='9') = event.key {
@@ -403,14 +415,14 @@ impl Controller {
                 return false;
             }
             if self.using_rime && !self.choices.is_empty() {
-                self.select_rime_candidate(self.page * 9);
+                self.select_rime_candidate(self.highlighted_index());
                 return true;
             }
             let chinese =
                 !self.choices.is_empty() || self.correction_language == Some(Language::Chinese);
             let value = match &self.correction {
                 Some(correction) => correction.clone(),
-                None if chinese => self.choices[self.page * 9].clone(),
+                None if chinese => self.choices[self.highlighted_index()].clone(),
                 None if self.language == Language::Chinese => self.raw.clone(),
                 None => self.preedit.clone(),
             };
@@ -437,14 +449,14 @@ impl Controller {
                             } else {
                                 updated
                             };
-                            self.page = 0;
+                            self.set_page(0);
                             self.render_rime();
                             return true;
                         }
                     }
                 }
                 self.raw.push(c);
-                self.page = 0;
+                self.set_page(0);
                 self.refresh();
                 true
             }
@@ -510,7 +522,7 @@ impl Controller {
             if pages > 1 {
                 hints.push(format!("{}/{pages}", self.page + 1));
             }
-            hints.push("1–9 chọn".to_owned());
+            hints.push("↑↓ 1–9 chọn".to_owned());
             hints.push("Space nhập".to_owned());
             if pages > 1 {
                 hints.push("← → trang".to_owned());
@@ -520,20 +532,13 @@ impl Controller {
             hints.push("Tab đổi tiếng".to_owned());
             hints.push("⇧Tab Auto".to_owned());
         }
-        if self.language_options.len() > 1 {
-            let flags: Vec<&str> = self
-                .language_options
-                .iter()
-                .map(|&option| Language::from_index(option).badge())
-                .collect();
-            hints.push(format!("↑↓ {}", flags.join(" ")));
-        }
         Panel {
             language: self.correction_language.unwrap_or(self.language),
             hints,
             items,
             page: self.page,
             pages,
+            highlight: self.highlight,
             show_meanings,
         }
     }
@@ -603,7 +608,7 @@ impl Controller {
             }
             _ => {
                 self.rime_editing = true;
-                self.page = 0;
+                self.set_page(0);
                 self.render_rime();
             }
         }
@@ -623,31 +628,11 @@ impl Controller {
     }
 
     fn reset_word(&mut self) {
-        self.page = 0;
+        self.set_page(0);
         self.rime_editing = false;
         self.using_rime = false;
         self.clear_rime();
         self.refresh();
-    }
-
-    fn step_language(&mut self, direction: isize) -> bool {
-        if self.settings.mode() != 0 || self.raw.is_empty() {
-            return false;
-        }
-        self.update_language_options();
-        let count = self.language_options.len();
-        if count < 2 {
-            return false;
-        }
-        let index = self
-            .language_options
-            .iter()
-            .position(|&option| option == self.language as u32)
-            .unwrap_or(0);
-        self.word_mode =
-            self.language_options[(index as isize + count as isize + direction) as usize % count];
-        self.reset_word();
-        true
     }
 
     /// Tab rotates the word being typed through EN → VI → 中; manual mode keeps the choice.
@@ -774,8 +759,18 @@ impl Controller {
         self.output.composition_changed = true;
     }
 
+    /// Any page change starts again at that page's first candidate.
+    fn set_page(&mut self, page: usize) {
+        self.page = page;
+        self.highlight = 0;
+    }
+
+    fn highlighted_index(&self) -> usize {
+        (self.page * 9 + self.highlight).min(self.choices.len().saturating_sub(1))
+    }
+
     fn clamp_page(&mut self) {
-        self.page = self.page.min(self.choices.len().saturating_sub(1) / 9);
+        self.set_page(self.page.min(self.choices.len().saturating_sub(1) / 9));
     }
 
     fn finish(&mut self, text: String) {
@@ -793,7 +788,7 @@ impl Controller {
         self.preedit.clear();
         self.caret = 0;
         self.choices.clear();
-        self.page = 0;
+        self.set_page(0);
         self.correction = None;
         self.correction_language = None;
     }
@@ -853,22 +848,40 @@ mod tests {
     }
 
     #[test]
-    fn arrows_choose_word_language() {
+    fn arrows_move_the_highlighted_candidate() {
         let mut c = controller();
-        typed(&mut c, "chao");
-        assert_eq!(c.language_options(), [1, 2, 3]);
-        assert_eq!(c.language(), Language::Vietnamese);
+        c.settings.automatic = false;
+        c.settings.language = 3;
+        typed(&mut c, "shi");
+        let count = c.choices().len();
+        assert!(count > 9, "more than one page of candidates");
         assert!(c.handle_key(KeyEvent::new(Key::Down)));
-        assert_eq!(
-            (c.language(), c.word_mode(), c.raw()),
-            (Language::Chinese, 3, "chao")
-        );
+        assert_eq!(c.panel(None).highlight, 1);
         assert!(c.handle_key(KeyEvent::new(Key::Up)));
-        assert_eq!(c.language(), Language::Vietnamese);
-        c.handle_key(KeyEvent::new(Key::Up));
-        assert_eq!(c.language(), Language::English);
-        assert_eq!(typed(&mut c, " ").commit, "chao");
-        assert_eq!(c.settings.mode(), 0, "selection is per word, Auto persists");
+        assert!(
+            c.handle_key(KeyEvent::new(Key::Up)),
+            "up wraps to the last candidate"
+        );
+        let panel = c.panel(None);
+        assert_eq!(
+            (panel.page, panel.highlight),
+            ((count - 1) / 9, (count - 1) % 9)
+        );
+        assert!(
+            c.handle_key(KeyEvent::new(Key::Down)),
+            "down wraps to the first"
+        );
+        c.handle_key(KeyEvent::new(Key::Down));
+        let second = c.choices()[1].clone();
+        assert_eq!(typed(&mut c, " ").commit, second);
+        assert_eq!(c.settings.mode(), 3, "arrows never change the language");
+        c.settings.automatic = true;
+        typed(&mut c, "vieetj");
+        assert!(
+            !c.handle_key(KeyEvent::new(Key::Down)),
+            "no candidates: the app gets the arrow"
+        );
+        assert_eq!(c.take_output().commit, "việt");
         assert!(
             !c.handle_key(KeyEvent::new(Key::Down)),
             "empty composition passes arrows"

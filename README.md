@@ -30,9 +30,9 @@ Type normally; KeyIn decides per word whether you are writing English, Vietnames
 few words. While a word is being composed it is underlined in the app, and a
 small frosted panel appears under it:
 
-- **Candidate row:** numbered suggestions in one line. The first (highlighted in
-  blue) is what Space inserts; `1`–`9` pick another, `←` `→` page through more
-  (the `›` arrow means more pages exist).
+- **Candidate row:** numbered suggestions in one line. The highlighted one (blue,
+  the first by default) is what Space inserts; `↑` `↓` move the highlight, `1`–`9`
+  pick directly, `←` `→` page through more (the `›` arrow means more pages exist).
 - **Footer:** the active language (🇺🇸 EN, 🇻🇳 VI, 🇨🇳 简中) in its colour, Auto or
   Manual, and the keys that work right now.
 
@@ -43,7 +43,7 @@ small frosted panel appears under it:
 | ← → | Previous / next candidate page |
 | Tab | Switch this word's language: EN → VI → 中 |
 | Shift–Tab | Turn Auto detection off (keeps the current language) or back on |
-| ↑ ↓ | Choose among the languages Auto thinks are plausible |
+| ↑ ↓ | Move the highlighted candidate (wraps across pages) |
 | Esc | Keep the raw keystrokes |
 
 Tab and Shift–Tab are only taken while a word is being composed; at any other
@@ -255,15 +255,13 @@ Rime can learn that choice when local learning is enabled.
 
 ## Choosing an ambiguous word's language
 
-In Auto, **Up / Down** cycle the available interpretations of the current raw
-input. The status bar shows `↑↓` and the available flags. English/literal input
-is always an escape choice; Vietnamese requires dictionary validation and Chinese
-requires Pinyin or initial-abbreviation evidence. For example, `chao` offers all
-three. Switching keeps the original keystrokes and restarts candidate selection
-for that language. The explicit choice remains for this word while editing;
-Space/Return commits it and updates language context, then Auto resumes for the
-next word. Escape retains the raw text. Up/Down pass through to the application
-when no composition or no alternatives exist; manual mode is unchanged.
+While a word is being composed, **Tab** cycles its language (EN → VI → 中, skipping
+disabled languages) and **Shift+Tab** toggles Auto. English/literal input is always
+an escape choice; for example, `chao` can be committed as English, Vietnamese or
+Chinese. Switching keeps the original keystrokes and restarts candidate selection
+for that language. In Auto the choice holds for this word only; Space/Return commits
+it and updates language context. **Up / Down** move the highlighted candidate; with
+no candidates they commit the word and pass through to the application.
 
 ### Chinese word meanings
 

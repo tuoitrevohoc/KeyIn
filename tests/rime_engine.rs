@@ -121,7 +121,14 @@ fn rime_session_and_controller() {
     c.take_output();
     typed(&mut c, "chao");
     assert_eq!(c.language(), Language::Vietnamese, "initial interpretation");
-    c.handle_key(KeyEvent::new(Key::Down));
-    assert!(c.using_rime() && c.word_mode() == 3, "down enters Chinese");
+    c.handle_key(KeyEvent::new(Key::Tab));
+    assert!(c.using_rime() && c.word_mode() == 3, "Tab enters Chinese");
     assert_eq!(c.raw(), "chao");
+    c.handle_key(KeyEvent::new(Key::Down));
+    let second = c.choices()[1].clone();
+    assert_eq!(
+        typed(&mut c, " "),
+        second,
+        "Down highlights the second Rime candidate"
+    );
 }
