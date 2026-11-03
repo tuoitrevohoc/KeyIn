@@ -31,6 +31,9 @@ pub const CLSID_KEYIN: GUID = GUID::from_u128(0xd86a7d9d_eb03_4c09_a19b_b8d723c5
 /// Input profile registered under Vietnamese (vi-VN).
 pub const PROFILE_KEYIN: GUID = GUID::from_u128(0x32967ad9_29d0_4724_99cd_26c0a0a907b8);
 
+/// The KeyIn logo, embedded by build.rs from assets/keyin.ico.
+pub(crate) const ICON_RESOURCE: windows::core::PCWSTR = windows::core::PCWSTR(1 as _);
+
 static mut MODULE: HMODULE = HMODULE(std::ptr::null_mut());
 
 pub(crate) fn module() -> HMODULE {

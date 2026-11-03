@@ -20,13 +20,13 @@ use windows::{
             Input::KeyboardAndMouse::EnableWindow,
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowW,
-                GetDlgItem, GetMessageW, IsDialogMessageW, PostQuitMessage, RegisterClassW,
-                SendMessageW, SetForegroundWindow, ShowWindow, TranslateMessage, BM_GETCHECK,
-                BM_SETCHECK, BN_CLICKED, BS_AUTOCHECKBOX, BS_PUSHBUTTON, CBN_SELCHANGE,
-                CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, HMENU,
-                MSG, SW_SHOWNORMAL, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COMMAND, WM_DESTROY,
-                WM_SETFONT, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_MINIMIZEBOX, WS_SYSMENU,
-                WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+                GetDlgItem, GetMessageW, IsDialogMessageW, LoadIconW, PostQuitMessage,
+                RegisterClassW, SendMessageW, SetForegroundWindow, ShowWindow, TranslateMessage,
+                BM_GETCHECK, BM_SETCHECK, BN_CLICKED, BS_AUTOCHECKBOX, BS_PUSHBUTTON,
+                CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL,
+                CW_USEDEFAULT, HMENU, MSG, SW_SHOWNORMAL, WINDOW_EX_STYLE, WINDOW_STYLE,
+                WM_COMMAND, WM_DESTROY, WM_SETFONT, WNDCLASSW, WS_CAPTION, WS_CHILD,
+                WS_MINIMIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
             },
         },
     },
@@ -287,6 +287,7 @@ pub extern "system" fn KeyInSettings(_: HWND, _: HINSTANCE, _: PSTR, _: i32) {
         lpfnWndProc: Some(window_proc),
         hInstance: instance,
         hbrBackground: unsafe { GetSysColorBrush(COLOR_BTNFACE) },
+        hIcon: unsafe { LoadIconW(crate::module(), crate::ICON_RESOURCE) }.unwrap_or_default(),
         lpszClassName: CLASS,
         ..Default::default()
     };
