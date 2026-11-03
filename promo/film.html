@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KeyIn Promo</title>
+<style>
+@font-face { font-family: SFP; src: url('file:///System/Library/Fonts/SFNS.ttf'); font-weight: 1 1000; }
+@font-face { font-family: SFP; font-style: italic; src: url('file:///System/Library/Fonts/SFNSItalic.ttf'); font-weight: 1 1000; }
+@font-face { font-family: SFM; src: url('file:///System/Library/Fonts/SFNSMono.ttf'); font-weight: 1 1000; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #F4F2ED; color: #141414;
+  font-family: SFP, 'PingFang SC', sans-serif; -webkit-font-smoothing: antialiased; }
+.abs { position: absolute; left: 0; top: 0; }
+/* Display face: SF Pro heavy */
+.hd { position: absolute; z-index: 5; font-family: SFP, 'PingFang SC'; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; line-height: 1.1; }
+.hd .w { display: inline-block; margin-right: .26em; transform-origin: 0 90%; }
+.hd .w:last-child { margin-right: 0; }
+.hd .acc { color: #007AFF; }
+.chip { position: absolute; font: 700 30px SFP, 'PingFang SC'; letter-spacing: .02em; padding: 10px 24px 11px; border-radius: 999px;
+  border: 3px solid #141414; white-space: nowrap; }
+.chip.on { background: #141414; color: #F4F2ED; }
+
+/* Hook lines */
+.hk { position: absolute; left: 150px; white-space: nowrap; }
+.hk .txt { font-family: SFP, 'PingFang SC'; font-weight: 700; font-size: 150px; letter-spacing: -0.02em; line-height: 1; }
+.hk .mk { text-decoration: underline; text-decoration-thickness: 6px; text-underline-offset: 16px; text-decoration-color: #9a9a9a; }
+.hk .raw { position: absolute; left: 4px; top: 172px; font: 500 34px SFM, Menlo, monospace; color: #8a8780; }
+.hk .tag { position: absolute; top: 34px; font: 700 40px SFP, 'PingFang SC'; padding: 10px 26px 12px; border-radius: 999px; color: #fff; white-space: nowrap; }
+.caret { display: inline-block; width: 0; border-left: 2px solid #141414; margin-left: 1px; vertical-align: -0.12em; height: 1.05em; }
+
+/* Windows, laid out in points and scaled by the camera group */
+.cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.win { position: absolute; transform-origin: 0 0; }
+.mac { width: 620px; height: 215px; background: #fff; border-radius: 11px; overflow: visible;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 22px 60px rgba(40,30,10,.20), 0 4px 14px rgba(40,30,10,.10); }
+.mac .bar { position: absolute; left: 0; top: 0; right: 0; height: 30px; border-bottom: 1px solid #e6e6e6; background: #f7f7f7; border-radius: 11px 11px 0 0; }
+.mac .tl { position: absolute; top: 9px; width: 12px; height: 12px; border-radius: 50%; }
+.mac .title { position: absolute; left: 0; right: 0; top: 7px; text-align: center; font: 600 13px SFP, 'PingFang SC'; color: #4d4d4d; }
+.doc { position: absolute; white-space: pre-wrap; word-break: normal; }
+.mac .doc { left: 26px; right: 26px; top: 50px; font: 400 28px 'Helvetica Neue', 'PingFang SC'; line-height: 42px; color: #141414; }
+.doc .mk { text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
+
+.wnd { width: 620px; height: 230px; background: #fff; border-radius: 8px; overflow: visible;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.14), 0 22px 60px rgba(40,30,10,.20); }
+.wnd .bar { position: absolute; left: 0; right: 0; top: 0; height: 36px; background: #EEF1F6; border-radius: 8px 8px 0 0; }
+.wnd .tab { position: absolute; left: 10px; top: 6px; height: 30px; width: 190px; background: #fff; border-radius: 7px 7px 0 0;
+  font: 400 12px Arial; color: #1b1b1b; padding: 8px 12px; }
+.wnd .tab b { position: absolute; right: 10px; top: 7px; font-weight: 400; color: #666; }
+.wnd .ctl { position: absolute; top: 9px; font: 300 15px Arial; color: #333; }
+.wnd .menu { position: absolute; left: 0; right: 0; top: 36px; height: 30px; border-bottom: 1px solid #ececec; font: 400 12px Arial; color: #333; padding: 8px 14px; word-spacing: 18px; }
+.wnd .doc { left: 16px; right: 16px; top: 80px; font: 400 25px Menlo, 'PingFang SC'; line-height: 38px; color: #111; }
+.wnd .status { position: absolute; left: 0; right: 0; bottom: 0; height: 24px; border-top: 1px solid #ececec; font: 400 11px Arial; color: #555; padding: 5px 14px; word-spacing: 6px; border-radius: 0 0 8px 8px; }
+
+/* macOS candidate panel (native/main.m showCandidates), in points */
+.mp { position: absolute; border-radius: 14px; background: rgba(246,246,247,.97); padding: 6px 6px 0; white-space: nowrap;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.16), 0 12px 32px rgba(0,0,0,.20); font-family: SFP, 'PingFang SC'; }
+.mp .items { display: flex; gap: 4px; align-items: center; }
+.mp.rows .items { flex-direction: column; align-items: stretch; gap: 2px; }
+.mp .it { height: 34px; padding: 0 12px; border-radius: 9px; display: flex; align-items: center; font-size: 16px; color: #1d1d1f; }
+.mp.rows .it { min-width: 508px; }
+.mp .it.sel { background: #007AFF; color: #fff; }
+.mp .n { font: 400 15px SFP, 'PingFang SC'; font-variant-numeric: tabular-nums; color: #8a8a8e; margin-right: 5px; }
+.mp .it.sel .n, .mp .it.sel .m { color: rgba(255,255,255,.82); }
+.mp .m { font: italic 300 13px SFP, 'PingFang SC'; color: #8a8a8e; margin-left: 5px; }
+.mp .chev { width: 26px; text-align: center; font: 600 15px SFP, 'PingFang SC'; color: #1d1d1f; }
+.mp .ft { height: 30px; display: flex; align-items: center; padding: 0 6px; margin: 6px -6px 0; border-top: 1px solid rgba(0,0,0,.1); font-size: 13px; color: #8a8a8e; }
+.mp.empty { padding-top: 0; }
+.mp.empty .ft { margin-top: 0; border-top: 0; }
+.mp .bd { font-weight: 600; margin: 0 6px; }
+
+/* Windows candidate window (windows/src/candidate.rs), in pixels at 100% */
+.wp { position: absolute; background: #fbfbfb; border: 1px solid #d0d0d0; padding: 8px 8px 0; white-space: nowrap;
+  box-shadow: 2px 3px 6px rgba(0,0,0,.18); font-family: Arial, 'PingFang SC'; }
+.wp .items { display: flex; gap: 4px; }
+.wp .it { height: 30px; padding: 0 8px; display: flex; align-items: center; font-size: 17px; color: #202020; border-radius: 6px; }
+.wp .it.sel { background: #1a73e8; color: #fff; }
+.wp .ft { height: 24px; display: flex; align-items: center; margin-top: 4px; font-size: 13px; color: #707070; }
+.wp.empty { padding-top: 0; }
+.wp.empty .ft { margin-top: 0; }
+.wp .bd { font-weight: 700; }
+
+/* Key strip */
+.keys { position: absolute; display: flex; gap: 8px; align-items: flex-end; }
+.kc { width: 50px; height: 54px; border-radius: 10px; background: #fff; border: 2.5px solid #141414; box-shadow: 0 5px 0 #141414;
+  font: 600 28px SFM, Menlo, monospace; display: flex; align-items: center; justify-content: center; color: #141414; }
+.kc.wide { width: auto; padding: 0 16px; font: 700 26px SFP, 'PingFang SC'; }
+.kc.hot { background: #007AFF; color: #fff; border-color: #0A4FB8; box-shadow: 0 5px 0 #0A4FB8; }
+.big-tab { position: absolute; width: 400px; height: 240px; border-radius: 30px; background: #fff; border: 6px solid #141414; box-shadow: 0 16px 0 #141414;
+  font: 800 110px SFP, 'PingFang SC'; display: flex; align-items: flex-end; justify-content: flex-start; padding: 0 0 22px 34px; }
+.big-tab.hot { background: #007AFF; color: #fff; border-color: #0A4FB8; box-shadow: 0 6px 0 #0A4FB8; }
+.big-tab span { position: absolute; right: 36px; top: 26px; font-size: 64px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="edl.js"></script>
+<script src="data.js"></script>
+<script src="film.js"></script>
+</body>
+</html>

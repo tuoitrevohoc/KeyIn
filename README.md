@@ -2,6 +2,13 @@
 
 **A local-first macOS keyboard for English, Vietnamese Telex, and Simplified Chinese.**
 
+[![KeyIn 30-second promo](docs/media/keyin-promo.gif)](docs/media/keyin-promo.mp4)
+
+A 30-second promo for macOS and Windows (Vietnamese captions). Click it for the
+full-resolution video with sound.
+Every keystroke, candidate and meaning in it comes from the real engine;
+`promo/` renders it (see `promo/CLAUDE.md`).
+
 ![KeyIn animated typing demo](docs/media/keyin-demo.gif)
 
 A screen recording of KeyIn in TextEdit (idle pauses shortened, slightly sped
