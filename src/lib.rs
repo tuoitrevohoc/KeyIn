@@ -2,133 +2,47 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::{c_char, CStr, CString},
-    sync::OnceLock,
 };
 
 pub mod controller;
 pub mod meanings;
 pub mod rime;
 
-fn spelling_key(text: &str) -> String {
-    // Treat hòa/hoà and thủy/thuỷ alike without discarding the tone itself.
-    let mut tone = 0;
-    let mut key = String::new();
-    for c in text.to_lowercase().chars() {
-        if let Some(row) = VOWELS.iter().find(|row| row.contains(c)) {
-            let index = row.chars().position(|v| v == c).unwrap();
-            if index != 0 {
-                tone = index;
-            }
-        }
-        key.push(base(c));
-    }
-    key.push(char::from_digit(tone as u32, 10).unwrap());
-    key
-}
-
-fn vietnamese_syllables() -> &'static HashSet<String> {
-    static WORDS: OnceLock<HashSet<String>> = OnceLock::new();
-    WORDS.get_or_init(|| {
-        include_str!("../data/vietnamese-syllables.txt")
-            .lines()
-            .map(spelling_key)
-            .collect()
-    })
-}
+include!("spelling.rs");
+include!(concat!(env!("OUT_DIR"), "/tables.rs"));
 
 fn valid_vietnamese(text: &str) -> bool {
-    vietnamese_syllables().contains(&spelling_key(text))
+    VIETNAMESE_SYLLABLES
+        .binary_search(&spelling_key(text).as_str())
+        .is_ok()
 }
 
-fn dictionary() -> &'static HashMap<String, Vec<String>> {
-    static DICT: OnceLock<HashMap<String, Vec<String>>> = OnceLock::new();
-    DICT.get_or_init(|| {
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
-        // Frequent candidates precede the source dictionary's lexical ordering.
-        for (key, values) in [
-            ("ni", "你 妳 尼"),
-            ("hao", "好 號"),
-            ("nihao", "你好"),
-            ("zhongguo", "中國"),
-            ("wo", "我"),
-            ("shi", "是 時 事"),
-            ("de", "的 得 地"),
-            ("le", "了 乐"),
-            ("ma", "吗 嘛 马"),
-            ("xiexie", "謝謝"),
-            ("zaijian", "再見"),
-            ("shijie", "世界"),
-            ("zhongwen", "中文"),
-        ] {
-            map.insert(
-                key.into(),
-                values.split_whitespace().map(str::to_owned).collect(),
-            );
-        }
-        // This source contains phrase frequencies. Sort before merging: source
-        // file order is not candidate preference (rare glyphs often come first).
-        let mut weighted: HashMap<String, Vec<(&str, u64)>> = HashMap::new();
-        for line in include_str!("../data/pinyin_simp.dict.yaml").lines() {
-            let mut fields = line.split('\t');
-            if let (Some(word), Some(reading), Some(weight)) =
-                (fields.next(), fields.next(), fields.next())
-            {
-                let key = reading.replace(' ', "");
-                if key.is_empty() || !key.bytes().all(|b| b.is_ascii_lowercase()) {
-                    continue;
-                }
-                if let Ok(weight) = weight.parse::<u64>() {
-                    weighted.entry(key).or_default().push((word, weight));
-                }
-            }
-        }
-        for (key, mut entries) in weighted {
-            entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
-            let values = map.entry(key).or_default();
-            for (word, _) in entries {
-                if !values.iter().any(|v| v == word) {
-                    values.push(word.to_owned());
-                }
-            }
-        }
-        for line in include_str!("../data/luna_pinyin.dict.yaml").lines() {
-            let mut fields = line.split('\t');
-            if let (Some(word), Some(reading)) = (fields.next(), fields.next()) {
-                let key = reading.replace(' ', "");
-                if !key.chars().all(|c| c.is_ascii_lowercase()) {
-                    continue;
-                }
-                let values = map.entry(key).or_default();
-                if !values.iter().any(|v| v == word) {
-                    values.push(word.to_owned());
-                }
-            }
-        }
-        map
-    })
+fn english_common(word: &str) -> bool {
+    ENGLISH_COMMON.binary_search(&word).is_ok()
 }
 
-const VOWELS: [&str; 12] = [
-    "aáàảãạ",
-    "ăắằẳẵặ",
-    "âấầẩẫậ",
-    "eéèẻẽẹ",
-    "êếềểễệ",
-    "iíìỉĩị",
-    "oóòỏõọ",
-    "ôốồổỗộ",
-    "ơớờởỡợ",
-    "uúùủũụ",
-    "ưứừửữự",
-    "yýỳỷỹỵ",
-];
-fn base(c: char) -> char {
-    let c = c.to_lowercase().next().unwrap();
-    VOWELS
-        .iter()
-        .find(|s| s.contains(c))
-        .map_or(c, |s| s.chars().next().unwrap())
+/// Candidates for an exact Pinyin reading, best first.
+fn lookup(reading: &str) -> Option<&'static str> {
+    DICTIONARY
+        .binary_search_by(|(key, _)| key.cmp(&reading))
+        .ok()
+        .map(|i| DICTIONARY[i].1)
 }
+
+/// Whether any entry of a sorted table starts with `prefix`.
+fn has_prefix<'a>(sorted: impl Fn(usize) -> &'a str, len: usize, prefix: &str) -> bool {
+    let (mut low, mut high) = (0, len);
+    while low < high {
+        let mid = (low + high) / 2;
+        if sorted(mid) < prefix {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    low < len && sorted(low).starts_with(prefix)
+}
+
 fn case(c: char, original: char) -> char {
     if original.is_uppercase() {
         c.to_uppercase().next().unwrap()
@@ -260,6 +174,29 @@ pub fn telex(raw: &str) -> String {
 /// Exact phrases win; otherwise retain the best nine complete dictionary paths.
 /// Apostrophes are hard boundaries, and incomplete suffixes never get dropped.
 fn pinyin_candidates(key: &str) -> Vec<String> {
+    // Every keystroke asks for the same readings several times (composition,
+    // language options, corrections), so remember recent answers.
+    thread_local! {
+        static RECENT: std::cell::RefCell<HashMap<String, Vec<String>>> = Default::default();
+    }
+    if let Some(hit) = RECENT.with(|recent| recent.borrow().get(key).cloned()) {
+        return hit;
+    }
+    let result = search_pinyin(key);
+    RECENT.with(|recent| {
+        let mut recent = recent.borrow_mut();
+        if recent.len() >= 256 {
+            recent.clear();
+        }
+        recent.insert(key.to_owned(), result.clone());
+    });
+    result
+}
+
+/// Best (cost, text) conversions of a reading prefix.
+type Paths = Vec<(usize, String)>;
+
+fn search_pinyin(key: &str) -> Vec<String> {
     if key.is_empty()
         || key.len() > 128
         || !key.bytes().all(|b| b.is_ascii_lowercase() || b == b'\'')
@@ -269,26 +206,46 @@ fn pinyin_candidates(key: &str) -> Vec<String> {
     {
         return Vec::new();
     }
-    if let Some(exact) = dictionary().get(key) {
-        return exact.clone();
+    if let Some(exact) = lookup(key) {
+        return exact.split(' ').map(str::to_owned).collect();
     }
-    let mut paths: Vec<Vec<(usize, String)>> = vec![Vec::new(); key.len() + 1];
-    paths[0].push((0, String::new()));
-    for end in 1..=key.len() {
+    // Best paths ending at each position depend only on the letters before it,
+    // so the table for the previous keystroke is reused up to the first change.
+    // Typing a long reading then costs one column per key instead of all of them.
+    thread_local! {
+        static LAST: std::cell::RefCell<(String, Vec<Paths>)> = Default::default();
+    }
+    let mut paths = LAST.with(|last| {
+        let (last_key, last_paths) = &mut *last.borrow_mut();
+        let common = last_key
+            .bytes()
+            .zip(key.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        let mut paths = std::mem::take(last_paths);
+        paths.truncate(if paths.is_empty() { 0 } else { common + 1 });
+        paths
+    });
+    if paths.is_empty() {
+        paths.push(vec![(0, String::new())]);
+    }
+    for end in paths.len()..=key.len() {
         if key.as_bytes()[end - 1] == b'\'' {
-            paths[end] = paths[end - 1].clone();
+            paths.push(paths[end - 1].clone());
             continue;
         }
         let mut next = Vec::new();
-        for start in 0..end {
+        // No reading is longer than LONGEST_READING, so only the last few
+        // positions can start a word ending here.
+        for start in end.saturating_sub(LONGEST_READING)..end {
             if paths[start].is_empty() {
                 continue;
             }
-            let Some(words) = dictionary().get(&key[start..end]) else {
+            let Some(words) = lookup(&key[start..end]) else {
                 continue;
             };
             for (cost, prefix) in &paths[start] {
-                for (rank, word) in words.iter().take(9).enumerate() {
+                for (rank, word) in words.split(' ').take(9).enumerate() {
                     next.push((cost + 100 + rank, format!("{prefix}{word}")));
                 }
             }
@@ -297,64 +254,58 @@ fn pinyin_candidates(key: &str) -> Vec<String> {
         let mut seen = HashSet::new();
         next.retain(|(_, word)| seen.insert(word.clone()));
         next.truncate(9);
-        paths[end] = next;
+        paths.push(next);
     }
-    paths
-        .pop()
-        .unwrap()
-        .into_iter()
-        .map(|(_, word)| word)
-        .collect()
+    let result = paths[key.len()]
+        .iter()
+        .map(|(_, word)| word.clone())
+        .collect();
+    LAST.with(|last| *last.borrow_mut() = (key.to_owned(), paths));
+    result
+}
+
+/// Fewest-syllable split of lowercase `key` into Pinyin syllables, where the
+/// last piece may be an unfinished syllable. Returns the end of each piece.
+fn pinyin_segments(key: &str) -> Option<Vec<usize>> {
+    let mut paths: Vec<Option<Vec<usize>>> = vec![None; key.len() + 1];
+    paths[key.len()] = Some(Vec::new());
+    for start in (0..key.len()).rev() {
+        for end in (start + 1..=key.len().min(start + 6)).rev() {
+            if PINYIN_SYLLABLES.binary_search(&&key[start..end]).is_err() {
+                continue;
+            }
+            if let Some(suffix) = &paths[end] {
+                let mut path = vec![end];
+                path.extend(suffix);
+                if paths[start]
+                    .as_ref()
+                    .is_none_or(|old| path.len() < old.len())
+                {
+                    paths[start] = Some(path);
+                }
+            }
+        }
+        if paths[start].is_none()
+            && has_prefix(
+                |i| PINYIN_SYLLABLES[i],
+                PINYIN_SYLLABLES.len(),
+                &key[start..],
+            )
+        {
+            paths[start] = Some(vec![key.len()]);
+        }
+    }
+    paths.swap_remove(0)
 }
 
 /// Display-only syllable separators; the host retains original keystrokes.
 fn pinyin_preedit(raw: &str) -> String {
-    static SYLLABLES: OnceLock<HashSet<&'static str>> = OnceLock::new();
-    let syllables = SYLLABLES.get_or_init(|| {
-        [
-            include_str!("../data/pinyin_simp.dict.yaml"),
-            include_str!("../data/luna_pinyin.dict.yaml"),
-        ]
-        .iter()
-        .flat_map(|source| source.lines())
-        .filter_map(|line| line.split('\t').nth(1))
-        .flat_map(str::split_whitespace)
-        .filter(|s| s.bytes().all(|b| b.is_ascii_lowercase()))
-        .collect()
-    });
     if !raw.is_ascii() || raw.len() > 128 {
         return raw.to_owned();
     }
     raw.split('\'')
         .map(|part| {
-            let key = part.to_ascii_lowercase();
-            let mut paths: Vec<Option<Vec<usize>>> = vec![None; key.len() + 1];
-            paths[key.len()] = Some(Vec::new());
-            for start in (0..key.len()).rev() {
-                for end in (start + 1..=key.len().min(start + 6)).rev() {
-                    if !syllables.contains(&key[start..end]) {
-                        continue;
-                    }
-                    if let Some(suffix) = &paths[end] {
-                        let mut path = vec![end];
-                        path.extend(suffix);
-                        if paths[start]
-                            .as_ref()
-                            .is_none_or(|old| path.len() < old.len())
-                        {
-                            paths[start] = Some(path);
-                        }
-                    }
-                }
-                if paths[start].is_none()
-                    && syllables
-                        .iter()
-                        .any(|syllable| syllable.starts_with(&key[start..]))
-                {
-                    paths[start] = Some(vec![key.len()]);
-                }
-            }
-            let Some(ends) = &paths[0] else {
+            let Some(ends) = pinyin_segments(&part.to_ascii_lowercase()) else {
                 return part.to_owned();
             };
             let mut start = 0;
@@ -375,16 +326,9 @@ fn pinyin_initials(raw: &str) -> bool {
     (2..=8).contains(&raw.len()) && raw.bytes().all(|b| b"bpmfdtnlgkhjqxrzcsyw".contains(&b))
 }
 
+/// Whether `key` begins some dictionary reading, looking at most six letters ahead.
 fn pinyin_prefix(key: &str) -> bool {
-    static PREFIXES: OnceLock<HashSet<String>> = OnceLock::new();
-    PREFIXES
-        .get_or_init(|| {
-            dictionary()
-                .keys()
-                .flat_map(|reading| (1..=reading.len().min(6)).map(|end| reading[..end].to_owned()))
-                .collect()
-        })
-        .contains(key)
+    key.len() <= 6 && has_prefix(|i| DICTIONARY[i].0, DICTIONARY.len(), key)
 }
 
 /// mode: 0 auto, 1 English, 2 Vietnamese, 3 Chinese.
@@ -402,7 +346,10 @@ pub(crate) fn compose_with_context(raw: &str, mode: u32, previous: u32) -> Strin
         "look", "good", "soon", "see", "new", "how", "now", "show", "know", "low", "row", "law",
         "draw", "raw", "saw", "few",
     ];
-    let candidates = if mode == 0 || mode == 3 {
+    // Capitals mark names and English words; automatic detection never reads
+    // them as Pinyin (Chinese can still be chosen explicitly).
+    let capital = raw.bytes().any(|b| b.is_ascii_uppercase());
+    let candidates = if mode == 3 || (mode == 0 && !capital) {
         pinyin_candidates(&key)
     } else {
         Vec::new()
@@ -420,16 +367,13 @@ pub(crate) fn compose_with_context(raw: &str, mode: u32, previous: u32) -> Strin
         // Short Pinyin particles/pronouns can also be English words (a, me, he).
         // Continue the most recently confirmed Chinese context in this ambiguity.
         3
-    } else if english.contains(&key.as_str())
-        || include_str!("../data/english-common.txt")
-            .split_whitespace()
-            .any(|word| word == key)
-    {
+    } else if english.contains(&key.as_str()) || english_common(&key) {
         1
     } else if vietnamese != raw && valid_vietnamese(&vietnamese) {
         2
     } else if previous == 3
         && !raw.is_empty()
+        && !capital
         && (!candidates.is_empty() || pinyin_prefix(&key) || pinyin_initials(raw))
     {
         3
@@ -489,12 +433,15 @@ pub(crate) fn correction(raw: &str, mode: u32) -> Option<String> {
     if mode == 1
         || valid_vietnamese(&telex(raw))
         || !pinyin_candidates(&lower).is_empty()
-        || include_str!("../data/english-common.txt")
-            .split_whitespace()
-            .any(|w| w == lower)
+        || english_common(&lower)
     {
         return None;
     }
+    // Pinyin still being typed ("...zh") is not a typo; searching every
+    // transposition of a long reading was the slowest part of a keystroke.
+    let capital = raw.bytes().any(|b| b.is_ascii_uppercase());
+    let chinese = (mode == 3 || (mode == 0 && raw.len() >= 6 && !capital))
+        && pinyin_segments(&lower).is_none();
     let mut results = HashSet::new();
     for i in 0..raw.len() - 1 {
         let mut bytes = raw.as_bytes().to_vec();
@@ -504,11 +451,35 @@ pub(crate) fn correction(raw: &str, mode: u32) -> Option<String> {
         if (mode == 0 || mode == 2) && vi != edited && valid_vietnamese(&vi) {
             results.insert(format!("Vietnamese\n{vi}"));
         }
-        if mode == 3 || (mode == 0 && raw.len() >= 6) {
+        if chinese {
             let candidates = pinyin_candidates(&edited.to_ascii_lowercase());
             if let Some(first) = candidates.first() {
                 results.insert(format!("Chinese\n{raw}\n{first}"));
             }
+        }
+    }
+    if results.is_empty() && chinese && raw.len() <= 16 {
+        // A finger landing on the key next to the intended one ("zhomgguo").
+        // Prefer edits that are whole dictionary phrases; give up if ambiguous.
+        // Longer input is left alone to keep every keystroke cheap.
+        let mut phrases = HashSet::new();
+        let mut paths = HashSet::new();
+        for (i, c) in lower.bytes().enumerate() {
+            for &near in neighbors(c) {
+                let mut bytes = lower.as_bytes().to_vec();
+                bytes[i] = near;
+                let edited = String::from_utf8(bytes).unwrap();
+                if let Some(words) = lookup(&edited) {
+                    phrases.insert(words.split(' ').next().unwrap().to_owned());
+                } else if let Some(first) = pinyin_candidates(&edited).first() {
+                    paths.insert(first.clone());
+                }
+            }
+        }
+        let best = if phrases.is_empty() { paths } else { phrases };
+        if best.len() == 1 {
+            let first = best.into_iter().next().unwrap();
+            results.insert(format!("Chinese\n{raw}\n{first}"));
         }
     }
     if results.len() == 1 {
@@ -516,6 +487,98 @@ pub(crate) fn correction(raw: &str, mode: u32) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Letters physically next to `c` on a QWERTY keyboard.
+fn neighbors(c: u8) -> &'static [u8] {
+    match c {
+        b'q' => b"wa",
+        b'w' => b"qeas",
+        b'e' => b"wrsd",
+        b'r' => b"etdf",
+        b't' => b"ryfg",
+        b'y' => b"tugh",
+        b'u' => b"yihj",
+        b'i' => b"uojk",
+        b'o' => b"ipkl",
+        b'p' => b"ol",
+        b'a' => b"qwsz",
+        b's' => b"weadzx",
+        b'd' => b"ersfxc",
+        b'f' => b"rtdgcv",
+        b'g' => b"tyfhvb",
+        b'h' => b"yugjbn",
+        b'j' => b"uihknm",
+        b'k' => b"iojlm",
+        b'l' => b"opk",
+        b'z' => b"asx",
+        b'x' => b"zsdc",
+        b'c' => b"xdfv",
+        b'v' => b"cfgb",
+        b'b' => b"vghn",
+        b'n' => b"bhjm",
+        b'm' => b"njk",
+        _ => b"",
+    }
+}
+
+/// Letters that can sensibly follow `raw`: they continue a Pinyin reading,
+/// a Vietnamese syllable (including Telex tone and vowel keys) or a common
+/// English word. Bit 0 is 'a'. Hosts use it to enlarge likely keys.
+/// Called on every keystroke, so it looks only at the end of the input.
+pub fn next_letters(raw: &str) -> u32 {
+    if raw.is_empty() || !raw.is_ascii() || raw.len() > 64 {
+        return (1 << 26) - 1;
+    }
+    let lower = raw.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    // reach[i]: lower[..i] splits into whole Pinyin syllables. A letter fits
+    // if it extends a syllable started at some reachable position.
+    let mut reach = vec![false; bytes.len() + 1];
+    reach[0] = true;
+    for end in 1..=bytes.len() {
+        reach[end] = if bytes[end - 1] == b'\'' {
+            reach[end - 1]
+        } else {
+            (end.saturating_sub(6)..end)
+                .any(|i| reach[i] && PINYIN_SYLLABLES.binary_search(&&lower[i..end]).is_ok())
+        };
+    }
+    let starts: Vec<usize> = (bytes.len().saturating_sub(5)..=bytes.len())
+        .filter(|&i| reach[i] && !lower[i..].contains('\''))
+        .collect();
+    // Vietnamese syllables are short; past that only Pinyin can continue.
+    let vietnamese = (raw.len() <= 10).then(|| telex(raw));
+    let has_vowel = vietnamese
+        .as_deref()
+        .is_some_and(|v| v.chars().any(|c| VOWELS.iter().any(|row| row.contains(c))));
+    let mut mask = 0;
+    for (bit, c) in ('a'..='z').enumerate() {
+        let typed = format!("{lower}{c}");
+        let plausible = starts
+            .iter()
+            .any(|&i| has_prefix(|j| PINYIN_SYLLABLES[j], PINYIN_SYLLABLES.len(), &typed[i..]))
+            || (has_vowel && "sfrxjzw".contains(c))
+            || (vietnamese.is_some() && {
+                let bases: String = telex(&typed).chars().map(base).collect();
+                has_prefix(|i| VIETNAMESE_BASES[i], VIETNAMESE_BASES.len(), &bases)
+            })
+            || has_prefix(|i| ENGLISH_COMMON[i], ENGLISH_COMMON.len(), &typed);
+        if plausible {
+            mask |= 1 << bit;
+        }
+    }
+    mask
+}
+
+/// # Safety
+/// `raw` must point to a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn keyin_next_letters(raw: *const c_char) -> u32 {
+    if raw.is_null() {
+        return (1 << 26) - 1;
+    }
+    next_letters(&unsafe { CStr::from_ptr(raw) }.to_string_lossy())
 }
 
 /// # Safety
@@ -570,6 +633,41 @@ pub unsafe extern "C" fn keyin_compose_context(
     }
     let raw = unsafe { CStr::from_ptr(raw) }.to_string_lossy();
     CString::new(compose_with_context(&raw, mode, previous))
+        .unwrap()
+        .into_raw()
+}
+
+/// Everything a host needs for one keystroke in a single call: language
+/// options, the correction (`correct_mode` above 3 skips it), then the
+/// composition, separated by U+001E. Lookups shared by the three are computed once.
+pub fn analyze(raw: &str, mode: u32, previous: u32, correct_mode: u32) -> String {
+    let correction = if correct_mode <= 3 {
+        correction(raw, correct_mode)
+    } else {
+        None
+    };
+    format!(
+        "{}\u{1e}{}\u{1e}{}",
+        language_options(raw),
+        correction.unwrap_or_default(),
+        compose_with_context(raw, mode, previous)
+    )
+}
+
+/// # Safety
+/// `raw` must point to a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn keyin_analyze(
+    raw: *const c_char,
+    mode: u32,
+    previous: u32,
+    correct_mode: u32,
+) -> *mut c_char {
+    if raw.is_null() {
+        return std::ptr::null_mut();
+    }
+    let raw = unsafe { CStr::from_ptr(raw) }.to_string_lossy();
+    CString::new(analyze(&raw, mode, previous, correct_mode))
         .unwrap()
         .into_raw()
 }
@@ -646,9 +744,67 @@ mod tests {
         }
     }
     #[test]
+    fn analyze_combines_the_three_calls() {
+        let parts: Vec<String> = analyze("tieengs", 0, 0, 0)
+            .split('\u{1e}')
+            .map(String::from)
+            .collect();
+        assert_eq!(parts[0], language_options("tieengs").to_string());
+        assert_eq!(parts[1], correction("tieengs", 0).unwrap_or_default());
+        assert_eq!(parts[2], compose_with_context("tieengs", 0, 0));
+        assert_eq!(analyze("teh", 0, 0, 9).split('\u{1e}').nth(1), Some(""));
+    }
+    #[test]
+    fn incremental_pinyin_matches_a_fresh_search() {
+        let sentence = "woxiangqubeijingkankantiananmenguangchang";
+        for end in 1..=sentence.len() {
+            let _ = pinyin_candidates(&sentence[..end]);
+        }
+        let fresh = std::thread::spawn(move || search_pinyin(sentence))
+            .join()
+            .unwrap();
+        assert_eq!(search_pinyin(sentence), fresh);
+        // Editing in the middle reuses only the unchanged prefix.
+        let edited = "woxiangqushanghai";
+        let fresh = std::thread::spawn(move || search_pinyin(edited))
+            .join()
+            .unwrap();
+        assert_eq!(search_pinyin(edited), fresh);
+    }
+    #[test]
+    fn neighbouring_key_typos_in_pinyin() {
+        assert_eq!(correction("zhongguo", 3), None);
+        assert_eq!(
+            correction("zhomgguo", 3),
+            Some("Chinese\nzhomgguo\n中國".into())
+        );
+    }
+    #[test]
+    fn likely_next_letters() {
+        let letters = |raw: &str| {
+            let mask = next_letters(raw);
+            ('a'..='z')
+                .enumerate()
+                .filter(|(i, _)| mask & (1 << i) != 0)
+                .map(|(_, c)| c)
+                .collect::<String>()
+        };
+        assert!(letters("zh").contains('a') && !letters("zh").contains('q'));
+        assert!(letters("q").contains('u') && !letters("q").contains('b'));
+        assert!(letters("tie").contains('e') && letters("tie").contains('s'));
+        assert_eq!(next_letters("").count_ones(), 26);
+    }
+    #[test]
+    fn capitals_are_not_detected_as_pinyin() {
+        assert!(compose("nihao", 0).starts_with("Chinese"));
+        assert!(!compose("Nihao", 0).starts_with("Chinese"));
+        assert!(!compose_with_context("Wo", 0, 3).starts_with("Chinese"));
+        assert!(compose("Nihao", 3).starts_with("Chinese\nNi'hao\n你好"));
+    }
+    #[test]
     fn dictionary_coverage() {
-        assert!(dictionary().len() > 10000);
-        assert!(vietnamese_syllables().len() > 6000);
+        assert!(DICTIONARY.len() > 10000);
+        assert!(VIETNAMESE_SYLLABLES.len() > 6000);
     }
     #[test]
     fn automatic_pinyin_separators_are_display_only() {
@@ -718,7 +874,9 @@ mod tests {
     #[test]
     fn pinyin_phrases_are_segmented_without_losing_suffixes() {
         for raw in ["nihaolema", "ni'hao'le'ma", "NIHAOLEMA"] {
-            for mode in [0, 3] {
+            // Capitals are only read as Pinyin when Chinese is chosen explicitly.
+            let modes: &[u32] = if raw == "NIHAOLEMA" { &[3] } else { &[0, 3] };
+            for &mode in modes {
                 assert_eq!(compose(raw, mode).lines().nth(2), Some("你好了吗"), "{raw}");
             }
         }
