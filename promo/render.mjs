@@ -1,4 +1,4 @@
-// node render.mjs sheet [offset]   one frame per beat -> qa/sheet.png
+// node render.mjs sheet [offset]   one frame per beat -> qa/sheet_<fmt>.png
 // node render.mjs at 1.2 3.4 ...    single frames -> qa/at_<t>.png
 // node render.mjs full              every frame, muxed with out/score.wav -> out/KeyIn_Promo_1920x1080.mp4
 // node render.mjs gif               the full render as a 960px 15 fps loop -> out/KeyIn_Promo.gif (README)
@@ -10,8 +10,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 new Function(readFileSync(join(here, 'edl.js'), 'utf8'))();
-const EDL = globalThis.EDL, [W, H] = EDL.size;
-const [mode = 'sheet', ...rest] = process.argv.slice(2);
+// --fmt=v renders the 1080x1920 portrait cut (TikTok, Reels); default is 1920x1080.
+const argv = process.argv.slice(2), FMT = argv.includes('--fmt=v') ? 'v' : 'h';
+const EDL = globalThis.EDL, [W, H] = FMT === 'v' ? [1080, 1920] : EDL.size;
+const [mode = 'sheet', ...rest] = argv.filter(a => !a.startsWith('--'));
 mkdirSync(join(here, 'qa'), { recursive: true });
 mkdirSync(join(here, 'out'), { recursive: true });
 
@@ -19,7 +21,7 @@ const browser = await chromium.launch({ args: ['--allow-file-access-from-files']
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 page.on('pageerror', e => console.error('pageerror', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('console', m.text()); });
-await page.goto(pathToFileURL(join(here, 'film.html')).href);
+await page.goto(pathToFileURL(join(here, 'film.html')).href + `?fmt=${FMT}`);
 await page.evaluate(() => window.ready);
 const frame = async t => { await page.evaluate(t => window.seek(t), t); return page.screenshot({ type: 'png' }); };
 
@@ -29,17 +31,17 @@ if (mode === 'sheet') {
   mkdirSync(dir, { recursive: true });
   for (let k = 0; k < beats; k++) writeFileSync(join(dir, `${String(k).padStart(2, '0')}.png`), await frame(+(k * 60 / EDL.bpm + off).toFixed(3)));
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', join(dir, '%02d.png'),
-    '-vf', 'scale=316:-2,pad=320:182:2:2:white,tile=6x10', '-frames:v', '1', join(here, 'qa', 'sheet.png')]);
-  console.log('sheet -> qa/sheet.png');
+    '-vf', FMT === 'v' ? 'scale=176:-2,pad=180:316:2:2:white,tile=10x6' : 'scale=316:-2,pad=320:182:2:2:white,tile=6x10', '-frames:v', '1', join(here, 'qa', `sheet_${FMT}.png`)]);
+  console.log(`sheet -> qa/sheet_${FMT}.png`);
 } else if (mode === 'at') {
-  for (const s of rest) { writeFileSync(join(here, 'qa', `at_${s}.png`), await frame(Number(s))); console.log(`qa/at_${s}.png`); }
+  for (const s of rest) { writeFileSync(join(here, 'qa', `at_${FMT}_${s}.png`), await frame(Number(s))); console.log(`qa/at_${FMT}_${s}.png`); }
 } else if (mode === 'gif') {
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', join(here, 'out', `KeyIn_Promo_${W}x${H}.mp4`), '-filter_complex',
     'fps=15,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff:max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
     '-loop', '0', join(here, 'out', 'KeyIn_Promo.gif')]);
   console.log('gif -> out/KeyIn_Promo.gif');
 } else if (mode === 'full') {
-  const out = join(here, 'out', 'video_noaudio.mp4');
+  const out = join(here, 'out', `video_noaudio_${FMT}.mp4`);
   const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'image2pipe', '-framerate', String(EDL.fps), '-i', '-',
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', String(EDL.fps), '-movflags', '+faststart', out],
     { stdio: ['pipe', 'inherit', 'inherit'] });
