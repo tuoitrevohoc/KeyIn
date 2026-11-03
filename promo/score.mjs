@@ -266,17 +266,17 @@ const pop2 = (t, m, g = 0.36) => send(t, pop(m), g, 0.1, 0.25);
 // hook: each word lands with a rising pop + glock
 [[0.75, 69], [1.25, 72], [2.0, 76]].forEach(([t, m]) => { pop2(t, m, 0.42); send(t, glock(m + 12, 0.9), 0.2, 0.2, 0.4); });
 const whoosh = (t, d, pan = 0) => { const w = sweepNoise(d, 350, 4200, 1.0); put(DRY, t, w, 0.45, pan - 0.4); put(DRY, t + 0.04, w, 0.35, pan + 0.4); };
-whoosh(C_.mac - 0.05, 0.6); whoosh(C_.win - 0.1, 0.6); whoosh(C_.tab - 0.1, 0.6); whoosh(C_.local - 0.25, 0.5);
+whoosh(C_.mac - 0.05, 0.6); whoosh(C_.win - 0.1, 0.6); whoosh(C_.local - 0.25, 0.5);
 // zoom into the candidates: riser, then a chord when 你好 commits
 send(C_.zoom - 0.6, sweepNoise(0.7, 500, 5000, 1.4), 0.22, 0, 0.3);
-const commitT = EDL.scenes.mac.keys.find((k, i, a) => k.ch === ' ' && a[i - 1].ch === 'o' && k.t > C_.zoom).t;
+const commitT = EDL.scenes.mac.keys.find(k => k.afterHold && k.t > C_.zoom).t;
 [0, 3, 7, 12].forEach((iv, j) => send(commitT + j * 0.05, glock(81 + iv, 1.0), 0.24, -0.3 + j * 0.2, 0.4));
-// Windows: a pop on every Chinese commit (space after a Pinyin word)
-for (const k of EDL.scenes.win.keys) if (k.ch === ' ' && k.t > 15.5 && k.t < 18.4) pop2(k.t, 79, 0.28);
-// Tab: each switch gets its own note
-EDL.scenes.tab.keys.filter(k => k.ch === '\t').forEach((k, i) => { pop2(k.t, [76, 79, 84][i], 0.42); send(k.t, glock([88, 91, 96][i], 0.8), 0.14, 0.2, 0.4); });
+// Windows: a pop on every Chinese commit (the Space that ends a hold)
+for (const k of EDL.scenes.win.keys) if (k.afterHold) pop2(k.t, 79, 0.28);
+// Tab: every language switch gets a rising note
+Object.values(EDL.scenes).flatMap(s => s.keys).filter(k => k.ch === '\t').forEach((k, i) => { pop2(k.t, [76, 79, 84][i % 3], 0.4); send(k.t, glock([88, 91, 96][i % 3], 0.8), 0.12, 0.2, 0.4); });
 // on-device statements and the end card
-[24.0, 24.5, 25.0].forEach((t, i) => { put(DRUMS, t, kick(1.1), 0.7); pop2(t, [72, 74, 76][i], 0.3); });
+[C_.local, C_.local + 0.5, C_.local + 1.0].forEach((t, i) => { put(DRUMS, t, kick(1.1), 0.7); pop2(t, [72, 74, 76][i], 0.3); });
 put(DRUMS, C_.end, kick(1.3), 1.0); send(C_.end, filt(sweepNoise(1.6, 7000, 5000, 0.5), 'hp', 4000), 0.26, 0, 0.5);
 [[C_.end + 0.25, 81], [C_.end + 0.5, 84], [C_.end + 1.0, 88], [C_.end + 1.5, 93]].forEach(([t, m]) => send(t, glock(m, 1.4), 0.2, 0.2, 0.45));
 send(C_.end, pad([57, 60, 64, 69], 3.6), 0.2, 0, 0.5);

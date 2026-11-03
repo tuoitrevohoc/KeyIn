@@ -10,14 +10,12 @@ const LY = V ? {
   W: 1080, H: 1920, head: { x: 70, y: 300, size: 76, w: 940 }, band: 570,
   hook: { ys: [540, 870, 1200], size: 140, tagBelow: true },
   S: 1.75, WX: 70, WY: 660, winW: 540, macH: 270, wndH: 230, strip: { y: 1300, n: 15 }, zoomC: [560, 920],
-  tab: { key: [70, 1230], word: [70, 660], panel: [70, 960, 1.4] },
   local: { x: 70, y: 560, dy: 290, size: 100, w: 940 },
   end: { mark: [60, 450, 300], word: [370, 472, 200], sub: [76, 840, 66, 930], chips: [76, 1050], url: [76, 1160, 112], gh: [80, 1310, 36] },
 } : {
   W: 1920, H: 1080, head: { x: 120, y: 62, size: 64, w: 0 }, band: 180,
   hook: { ys: [205, 455, 705], size: 150, tagBelow: false },
   S: 2.5, WX: 185, WY: 196, winW: 620, macH: 215, wndH: 230, strip: { y: 815, n: 22 }, zoomC: [860, 420],
-  tab: { key: [110, 540], word: [560, 350], panel: [560, 650, 1.95] },
   local: { x: 150, y: 250, dy: 200, size: 116, w: 0 },
   end: { mark: [150, 200, 330], word: [510, 228, 230], sub: [156, 600, 64, 0], chips: [156, 722], url: [156, 836, 84], gh: [160, 950, 34] },
 };
@@ -73,11 +71,12 @@ function head(t0, t1, words, x = LY.head.x, y = LY.head.y, size = LY.head.size, 
   HEADS.push({ h, ws, t0, t1 });
 }
 head(0.0, 2.85, ['Một', 'bộ', 'gõ.', '*Ba', '*thứ', '*tiếng.']);
-head(3.05, 6.4, [{ chip: 'macOS' }, 'Tự', 'nhận', 'tiếng', '*từng', '*chữ.']);
-head(6.5, 9.6, [{ chip: 'macOS' }, 'Telex', 'ra', 'tiếng', 'Việt,', '*English', '*vẫn', '*là', '*English.']);
-head(9.75, 13.35, ['Gõ', 'Pinyin', 'ra', 'chữ', 'Hán,', '*kèm', '*nghĩa.']);
-head(13.6, 19.35, [{ chip: 'Windows' }, 'Cũng', 'gõ', 'được', '*trên', '*Windows.']);
-head(19.6, 23.85, ['Lỡ', 'sai', 'tiếng?', 'Nhấn', '*Tab.']);
+// Mac headlines follow the keys: Tab and the 2 that picks a candidate.
+const macTab = SC.mac.keys.find(k => k.ch === '\t').t, macPick = SC.mac.keys.find(k => k.ch === '2').t;
+head(3.05, macTab - 0.15, [{ chip: 'macOS' }, 'Tự', 'nhận', 'tiếng', '*từng', '*chữ.']);
+head(macTab, macPick + 0.6, ['Lỡ', 'sai', 'tiếng?', 'Nhấn', '*Tab,', '*có', '*cả', '*nghĩa.']);
+head(macPick + 0.75, CUT.win - 0.15, [{ chip: 'macOS' }, 'Telex,', 'Pinyin,', 'English:', '*gõ', '*một', '*mạch.']);
+head(CUT.win + 0.1, CUT.tab - 0.15, [{ chip: 'Windows' }, 'Cũng', 'gõ', 'được', '*trên', '*Windows.']);
 function paintHeads(t) {
   for (const { h, ws, t0, t1 } of HEADS) {
     const on = t >= t0 - 0.01 && t < t1 + 0.3;
@@ -207,42 +206,6 @@ function paintKeys(id, t, alpha) {
   op(strip, alpha);
 }
 
-// ---------- tab close-up ----------
-const TAB = (() => {
-  const box = el('div', 'abs', stage, `width:${LY.W}px;height:${LY.H}px`);
-  const key = el('div', 'big-tab', box, `left:${LY.tab.key[0]}px;top:${LY.tab.key[1]}px`, 'Tab<span>⇥</span>');
-  const word = el('div', 'hd', box, `left:${LY.tab.word[0]}px;top:${LY.tab.word[1]}px;font-size:190px;font-weight:700`);
-  const tag = el('div', 'tag', box, `top:${LY.tab.word[1] + 66}px;` + 'position:absolute;font:700 48px SFP;padding:10px 26px 12px;border-radius:999px;color:#fff;white-space:nowrap');
-  const pw = el('div', 'abs', box, `left:${LY.tab.panel[0]}px;top:${LY.tab.panel[1]}px;transform-origin:0 0;transform:scale(${LY.tab.panel[2]})`);
-  const panel = el('div', 'mp', pw, 'position:relative');
-  return { box, key, word, tag, panel };
-})();
-function paintTab(t) {
-  const on = t >= CUT.tab && t < CUT.local;
-  show(TAB.box, on);
-  if (!on) return;
-  const s = state('tab', t), tabs = SC.tab.keys.filter(k => k.ch === '\t');
-  const inU = seg(t, CUT.tab, CUT.tab + 0.4, E.outQuint), out = seg(t, CUT.local - 0.25, CUT.local, E.in);
-  xf(TAB.box, `translateY(${(1 - inU) * 300 - out * LY.H}px)`);
-  op(TAB.box, inU);
-  const press = tabs.find(k => t >= k.t && t - k.t < 0.18);
-  TAB.key.className = 'big-tab' + (press ? ' hot' : '');
-  const lastTab = tabs.filter(k => t >= k.t).pop();
-  xf(TAB.key, `translateY(${press ? 10 : 0}px) rotate(-4deg)`);
-  setHTML(TAB.word, s.pre ? `<span style="text-decoration:underline;text-decoration-thickness:6px;text-underline-offset:18px;text-decoration-color:#9a9a9a">${esc(s.pre)}</span>` : '');
-  const L = LANG[s.lang];
-  setHTML(TAB.tag, `${L.flag} ${L.name}`);
-  TAB.tag.style.background = L.color;
-  TAB.tag.style.left = (LY.tab.word[0] + TAB.word.offsetWidth + 50) + 'px';
-  const u = lastTab ? seg(t, lastTab.t, lastTab.t + 0.3, E.outBack) : seg(t, SC.tab.keys[0].t, SC.tab.keys[0].t + 0.3, E.outBack);
-  show(TAB.tag, !!s.pre);
-  xf(TAB.tag, `scale(${0.5 + 0.5 * u}) rotate(${(1 - u) * -8}deg)`);
-  const p = macPanel(s, false);
-  show(TAB.panel, !!s.pre);
-  if (TAB.panel.className !== p.cls) TAB.panel.className = p.cls;
-  setHTML(TAB.panel, p.html);
-}
-
 // ---------- on-device statements ----------
 const LOCAL = [['Nhanh,', '*chạy', '*ngay', '*trên', '*máy.'], ['Không', 'cần', '*mạng.'], ['Không', 'gửi', 'dữ', 'liệu', '*đi', '*đâu.']]
   .map((ws, i) => { const n = HEADS.length; head(CUT.local + i * 0.5, CUT.end - 0.15, ws, LY.local.x, LY.local.y + i * LY.local.dy, LY.local.size, LY.local.w); return HEADS[n]; });
@@ -302,7 +265,7 @@ function paintWindows(t) {
     paintDoc(WIN, 'win', t, winPanel);
   }
   // Camera: push in on the Chinese candidates and their meanings, then pull back for the commit.
-  const z = seg(t, CUT.zoom, CUT.zoom + 0.5, E.inOut) * (1 - seg(t, 10.95, 11.4, E.inOut));
+  const z = seg(t, CUT.zoom, CUT.zoom + 0.5, E.inOut) * (1 - seg(t, CUT.zoomOut, CUT.zoomOut + 0.45, E.inOut));
   if (z > 0 && anchor) {
     const fx = WX + (anchor.x + 150) * S, fy = WY + anchor.y * S, Z = 1 + 0.45 * z;
     const cx = lerp(fx, LY.zoomC[0], z), cy = lerp(fy, LY.zoomC[1], z);
@@ -319,7 +282,6 @@ window.seek = t => {
   paintHeads(t);
   paintHook(t);
   paintWindows(t);
-  paintTab(t);
   paintEnd(t);
 };
 window.ready = document.fonts.ready.then(() => window.seek(0));
