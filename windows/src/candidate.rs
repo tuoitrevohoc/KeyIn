@@ -1,5 +1,5 @@
 //! Candidate window: a non-activating topmost popup drawn with GDI.
-//! One row of candidates (first highlighted) above a footer with the language badge and
+//! One row of candidates (the highlighted one in blue) above a footer with the language badge and
 //! key hints; with Chinese meanings enabled, one candidate per line.
 use keyin::controller::{Language, Panel};
 use std::cell::RefCell;
@@ -40,6 +40,7 @@ struct Layout {
     badge: String,
     hints: String,
     language: Option<Language>,
+    highlight: usize,
     width: i32,
     height: i32,
 }
@@ -234,6 +235,7 @@ impl CandidateWindow {
             badge: panel.language.badge().to_owned(),
             hints: format!("   {}", panel.hints.join("   ")),
             language: Some(panel.language),
+            highlight: panel.highlight,
             ..Default::default()
         };
         let mut x = PADDING;
@@ -332,7 +334,7 @@ fn paint(dc: HDC) {
             let old_font = SelectObject(dc, regular.latin);
             for (index, item) in layout.items.iter().enumerate() {
                 let mut rect = item.rect;
-                if index == 0 {
+                if index == layout.highlight {
                     SelectObject(dc, accent);
                     SelectObject(dc, GetStockObject(NULL_PEN));
                     let _ = RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, 12, 12);
@@ -346,7 +348,7 @@ fn paint(dc: HDC) {
                     rect.left += regular.width(dc, &item.label);
                     SetTextColor(
                         dc,
-                        if index == 0 {
+                        if index == layout.highlight {
                             rgb(0xe8, 0xf0, 0xfe)
                         } else {
                             rgb(0x70, 0x70, 0x70)

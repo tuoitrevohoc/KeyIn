@@ -44,7 +44,7 @@ the MSIs as artifacts.
    for the KeyIn keyboard in Windows language settings. Changes apply from the next word.
 
 Typing works as on macOS: Telex for Vietnamese, Pinyin for Chinese, 1–9 / Space to
-choose a candidate, ← → to page, ↑↓ to reinterpret the word, Tab to switch language and
+choose a candidate, ↑↓ to move the highlight, ← → to page, Tab to switch language and
 Shift+Tab to toggle Auto while a word is being composed. Uninstall from **Installed apps**.
 
 ## Known limitations

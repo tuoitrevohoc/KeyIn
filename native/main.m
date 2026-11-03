@@ -129,7 +129,10 @@ static BOOL tabShortcuts(void) {
 @property NSString *preedit;
 @property NSString *language;
 @property NSArray<NSString *> *choices;
-@property NSUInteger page;
+@property (nonatomic) NSUInteger page;
+// Highlighted candidate on the current page; ↑↓ move it, Space / Return commit it.
+@property (nonatomic) NSUInteger highlight;
+- (NSUInteger)highlightedIndex;
 @property NSDictionary<NSString *, NSDictionary *> *meanings;
 @property NSPanel *panel;
 @property NSTextField *label;
@@ -145,6 +148,9 @@ static BOOL tabShortcuts(void) {
 @property NSArray<NSNumber *> *languageOptions;
 @end
 @implementation KeyInController
+// Any page change starts again at that page's first candidate.
+- (void)setPage:(NSUInteger)page { _page = page; _highlight = 0; }
+- (NSUInteger)highlightedIndex { return MIN(self.page * 9 + self.highlight, self.choices.count ? self.choices.count - 1 : 0); }
 - (id)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)client {
     self = [super initWithServer:server delegate:delegate client:client];
     if (self) { _raw = [NSMutableString new]; _choices = @[]; _preedit = @""; _rime = [KeyInRime new]; _recentLanguages = [NSMutableArray new]; }
@@ -210,20 +216,6 @@ static BOOL tabShortcuts(void) {
     for (unsigned int language = 1; language <= 3; language++)
         if (mask & (1 << language)) [options addObject:@(language)];
     self.languageOptions = options;
-}
-- (BOOL)stepLanguage:(NSInteger)direction client:(id<IMKTextInput>)client {
-    if (self.mode || !self.raw.length) return NO;
-    [self updateLanguageOptions];
-    if (self.languageOptions.count < 2) return NO;
-    NSUInteger active = [@[@"English", @"Vietnamese", @"Chinese"] indexOfObject:self.language];
-    NSUInteger index = [self.languageOptions indexOfObject:@(active + 1)];
-    if (index == NSNotFound) index = 0;
-    NSInteger count = self.languageOptions.count;
-    self.wordMode = self.languageOptions[(index + count + direction) % count].unsignedIntValue;
-    self.page = 0; self.rimeEditing = NO; self.usingRime = NO;
-    [self.rime clear];
-    [self refresh:client];
-    return YES;
 }
 // Tab rotates the word being typed through EN → VI → 中; manual mode keeps the choice.
 - (void)switchLanguage:(id<IMKTextInput>)client {
@@ -431,17 +423,11 @@ static NSImage *roundedMask(CGFloat radius) {
         [hints addObject:@"Esc giữ gốc"];
     } else if (hasChoices) {
         if (pages > 1) [hints addObject:[NSString stringWithFormat:@"%lu/%lu", self.page + 1, pages]];
-        [hints addObject:@"1–9 chọn"];
+        [hints addObject:@"↑↓ 1–9 chọn"];
         [hints addObject:@"Space nhập"];
         if (pages > 1) [hints addObject:@"← → trang"];
     }
     if (self.raw.length && tabShortcuts()) [hints addObjectsFromArray:@[@"Tab đổi tiếng", @"⇧Tab Auto"]];
-    if (self.languageOptions.count > 1) {
-        NSMutableArray *flags = [NSMutableArray new];
-        NSArray *labels = @[@"", @"🇺🇸", @"🇻🇳", @"🇨🇳"];
-        for (NSNumber *option in self.languageOptions) [flags addObject:labels[option.unsignedIntegerValue]];
-        [hints addObject:[NSString stringWithFormat:@"↑↓ %@", [flags componentsJoinedByString:@" "]]];
-    }
     NSMutableAttributedString *statusText = [[NSMutableAttributedString alloc] initWithString:badge attributes:@{
         NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold],
         NSForegroundColorAttributeName: vi ? NSColor.systemTealColor : (zh ? NSColor.systemOrangeColor : NSColor.systemBlueColor)}];
@@ -461,7 +447,7 @@ static NSImage *roundedMask(CGFloat radius) {
         // Lay rows out bottom-up so the first candidate ends on top.
         NSMutableArray<NSNumber *> *rowHeights = [NSMutableArray new];
         for (NSUInteger i = 0; i < count; i++) {
-            NSAttributedString *text = [self styledCandidateLabelAtIndex:start + i number:i + 1 selected:i == 0];
+            NSAttributedString *text = [self styledCandidateLabelAtIndex:start + i number:i + 1 selected:i == self.highlight];
             [candidateLabels addObject:text];
             NSRect bounds = [text boundingRectWithSize:NSMakeSize(textWidth, CGFLOAT_MAX) options:NSStringDrawingUsesLineFragmentOrigin];
             [rowHeights addObject:@(MAX(itemHeight, MIN(70, ceil(bounds.size.height) + 12)))];
@@ -475,7 +461,7 @@ static NSImage *roundedMask(CGFloat radius) {
     } else {
         CGFloat x = inset;
         for (NSUInteger i = 0; i < count; i++) {
-            NSAttributedString *text = [self styledCandidateLabelAtIndex:start + i number:i + 1 selected:i == 0];
+            NSAttributedString *text = [self styledCandidateLabelAtIndex:start + i number:i + 1 selected:i == self.highlight];
             [candidateLabels addObject:text];
             CGFloat itemWidth = ceil(text.size.width) + 2 * itemPadding;
             [itemFrames addObject:[NSValue valueWithRect:NSMakeRect(x, footerHeight + inset, itemWidth, itemHeight)]];
@@ -522,7 +508,7 @@ static NSImage *roundedMask(CGFloat radius) {
     for (NSUInteger i = 0; i < count; i++) {
         NSRect frame = itemFrames[i].rectValue;
         NSView *item = [[NSView alloc] initWithFrame:frame];
-        if (i == 0) {
+        if (i == self.highlight) {
             item.wantsLayer = YES;
             item.layer.cornerRadius = 9;
             item.layer.backgroundColor = NSColor.controlAccentColor.CGColor;
@@ -592,7 +578,12 @@ static NSImage *roundedMask(CGFloat radius) {
         return YES;
     }
     if (!(flags & NSEventModifierFlagShift) && (event.keyCode == kVK_UpArrow || event.keyCode == kVK_DownArrow)) {
-        if ([self stepLanguage:event.keyCode == kVK_DownArrow ? 1 : -1 client:client]) return YES;
+        if (self.choices.count) {
+            NSUInteger count = self.choices.count;
+            NSUInteger next = ([self highlightedIndex] + (event.keyCode == kVK_DownArrow ? 1 : count - 1)) % count;
+            self.page = next / 9; self.highlight = next % 9;
+            [self showCandidates:client]; return YES;
+        }
         [self commitComposition:client]; return NO;
     }
     if (self.usingRime && self.raw.length &&
@@ -641,11 +632,11 @@ static NSImage *roundedMask(CGFloat radius) {
     if (event.keyCode == kVK_Space || event.keyCode == kVK_Return) {
         if (!self.raw.length) return NO;
         if (self.usingRime && self.choices.count) {
-            [self selectRimeCandidate:self.page * 9 client:client];
+            [self selectRimeCandidate:[self highlightedIndex] client:client];
             return YES;
         }
         BOOL chinese = self.choices.count > 0 || [self.correctionLanguage isEqualToString:@"Chinese"];
-        NSString *value = self.correction ?: (chinese ? self.choices[self.page * 9] : ([self.language isEqualToString:@"Chinese"] ? self.raw.copy : self.preedit));
+        NSString *value = self.correction ?: (chinese ? self.choices[[self highlightedIndex]] : ([self.language isEqualToString:@"Chinese"] ? self.raw.copy : self.preedit));
         if (self.correctionLanguage) self.language = self.correctionLanguage;
         [self rememberLanguage];
         [self finish:value client:client];
