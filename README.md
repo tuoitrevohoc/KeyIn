@@ -5,9 +5,10 @@
 [![KeyIn 30-second promo](docs/media/keyin-promo.gif)](docs/media/keyin-promo.mp4)
 
 A 30-second promo for macOS and Windows (Vietnamese captions); click it for the
-full-resolution video with sound. Everything is typed in Auto mode with no
-switching key, and every keystroke, candidate and meaning comes from the real
-engine; `promo/` renders it (see `promo/CLAUDE.md`).
+full-resolution video with sound. Auto mode picks the language for each word,
+and where it guesses wrong the video fixes it with Tab, as you would. Every
+keystroke, candidate and meaning comes from the real engine; `promo/` renders it
+(see `promo/CLAUDE.md`).
 
 **Status:** experimental 0.4 preview · **License:** LGPL-3.0-or-later
 
