@@ -18,6 +18,7 @@ fn main() {
         "src/spelling.rs",
         "data/pinyin_simp.dict.yaml",
         "data/luna_pinyin.dict.yaml",
+        "data/rime/keyin-words.tsv",
         "data/vietnamese-syllables.txt",
         "data/english-common.txt",
     ] {
@@ -25,6 +26,8 @@ fn main() {
     }
     let simp = fs::read_to_string("data/pinyin_simp.dict.yaml").unwrap();
     let luna = fs::read_to_string("data/luna_pinyin.dict.yaml").unwrap();
+    // Frequent words missing from pinyin_simp, on the same weight scale.
+    let words = fs::read_to_string("data/rime/keyin-words.tsv").unwrap();
     let mut out = String::new();
 
     // Reading -> candidates, in preference order.
@@ -53,7 +56,7 @@ fn main() {
     // This source contains phrase frequencies. Sort before merging: source
     // file order is not candidate preference (rare glyphs often come first).
     let mut weighted: HashMap<String, Vec<(&str, u64)>> = HashMap::new();
-    for line in simp.lines() {
+    for line in simp.lines().chain(words.lines()) {
         let mut fields = line.split('\t');
         if let (Some(word), Some(reading), Some(weight)) =
             (fields.next(), fields.next(), fields.next())

@@ -890,6 +890,18 @@ mod tests {
         assert!(!pinyin_candidates("xi'an").contains(&"先".to_string()));
     }
     #[test]
+    fn whole_words_beat_unrelated_syllable_picks() {
+        // pinyin_simp alone read these as 月难于 / 月男人 / 韩国与.
+        for (raw, expected) in [
+            ("yuenanyu", "越南语"),
+            ("yuenanren", "越南人"),
+            ("hanguoyu", "韩国语"),
+            ("xibanyayu", "西班牙语"),
+        ] {
+            assert_eq!(pinyin_candidates(raw)[0], expected, "{raw}");
+        }
+    }
+    #[test]
     fn vietnamese_dictionary_resolves_pinyin_collisions() {
         for (raw, expected) in [
             ("chao", "chao"),

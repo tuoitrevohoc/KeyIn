@@ -84,6 +84,16 @@ fn rime_session_and_controller() {
         "怎么样",
         "private schema"
     );
+    // Whole words from keyin-words.tsv, not unrelated pieces such as 月难于.
+    for (raw, expected) in [
+        ("yuenanyu", "越南语"),
+        ("yuenanren", "越南人"),
+        ("hanguoyu", "韩国语"),
+    ] {
+        engine.clear();
+        assert!(engine.set_input(raw), "{raw}");
+        assert_eq!(engine.snapshot().unwrap().choices[0], expected, "{raw}");
+    }
     engine.clear();
     engine.set_learning(true);
     assert!(
