@@ -38,11 +38,12 @@ enum Language: UInt32, CaseIterable {
 /// hardware key events. The word being typed goes straight into the document
 /// and only the part that changed is rewritten. Marked (underlined) text was
 /// tried and dropped: hosts reflow the line when it appears and disappears.
-/// Pinyin is shown as the raw keystrokes, so typing it only ever appends a
-/// letter; the syllable-separated reading is on the candidate bar.
+/// Pinyin shows its syllable separators, as on the desktop.
 ///
-/// Keystrokes update `raw` at once; the engine runs once per run-loop turn, so
-/// a burst of fast taps costs a single refresh.
+/// Keystrokes update `raw` at once on the main thread, which then only hands
+/// the input to `EngineWorker`, so touches are never held up by the engine.
+/// The answer comes back as a `generation`-tagged reply; anything acting on the
+/// word (space, punctuation, a candidate) first calls `settle()` to wait for it.
 final class Composer {
     weak var output: TextOutput?
     var onChange: (() -> Void)?
@@ -57,19 +58,31 @@ final class Composer {
     private(set) var choices: [String] = []
     private(set) var correction: String?
     private(set) var languageOptions: [Language] = []
-    private var correctionLanguage: Language?
+    /// The word's reading in the other languages it could be.
+    private(set) var alternatives: [EngineWorker.Alternative] = []
+    private(set) var correctionLanguage: Language?
     private var wordMode: UInt32 = 0
     /// What this composition has typed into the document so far.
     private var shown = ""
-    private var lastWrite = Date.distantPast
+    private var lastKey = Date.distantPast
     private var recentLanguages: [Language] = []
-    private var refreshPending = false
+    private let worker = EngineWorker()
+    /// Bumped by every change to the input; `applied` catches up as replies arrive.
+    private var generation = 0
+    private var applied = 0
+    private var request: EngineWorker.Request?
 
     static let allLetters: UInt32 = (1 << 26) - 1
     /// Letters that can follow `raw` (bit 0 = a), for enlarging likely keys.
     private(set) var nextLetters = allLetters
 
     var isComposing: Bool { !raw.isEmpty }
+
+    init() {
+        worker.onReply = { [weak self] in self?.apply($0) }
+    }
+
+    deinit { worker.stop() }
 
     func type(_ letter: String) {
         if raw.count >= 128 { commit() }
@@ -78,27 +91,39 @@ final class Composer {
     }
 
     func backspace() {
-        guard !raw.isEmpty else { output?.deleteBackward(); return }
+        guard !raw.isEmpty else {
+            settle()
+            output?.deleteBackward()
+            return
+        }
         raw.removeLast()
         scheduleRefresh()
     }
 
     private func scheduleRefresh() {
-        guard !refreshPending else { return }
-        refreshPending = true
-        DispatchQueue.main.async { [weak self] in self?.flush() }
+        if raw.isEmpty { wordMode = 0 }
+        lastKey = Date()
+        let settled = applied == generation
+        generation += 1
+        let next = EngineWorker.Request(
+            generation: generation, raw: raw, mode: wordMode != 0 ? wordMode : mode,
+            previous: recentLanguages.last?.rawValue ?? 0, carried: settled ? language : nil,
+            offersAlternatives: mode == 0,
+            correctMode: autocorrect && wordMode == 0 ? mode : nil)
+        request = next
+        worker.submit(next)
     }
 
-    /// Bring candidates up to date before acting on them.
-    private func flush() {
-        guard refreshPending else { return }
-        refreshPending = false
-        refresh()
+    /// Bring the composition up to date before acting on it. The wait is the
+    /// length of one analysis, well under a millisecond.
+    func settle() {
+        guard applied != generation, let request else { return }
+        apply(worker.reply(for: request))
     }
 
     /// Space or return: confirm the best reading, like the macOS space key.
     func confirm() {
-        flush()
+        settle()
         guard !raw.isEmpty else { return }
         let value: String
         if let correction {
@@ -112,15 +137,29 @@ final class Composer {
         finish(value)
     }
 
+    /// Take another language's reading. Chinese still needs a candidate picked.
+    func chooseAlternative(_ index: Int) {
+        settle()
+        guard alternatives.indices.contains(index) else { return }
+        let alternative = alternatives[index]
+        if alternative.language == .chinese {
+            wordMode = alternative.language.rawValue
+            scheduleRefresh()
+        } else {
+            language = alternative.language
+            finish(alternative.text)
+        }
+    }
+
     func choose(_ index: Int) {
-        flush()
+        settle()
         guard choices.indices.contains(index) else { return }
         finish(choices[index])
     }
 
     /// Keep what is shown and forget the composition (cursor moved, punctuation, dismissal).
     func commit() {
-        flush()
+        settle()
         guard !raw.isEmpty else { return }
         finish(language == .chinese ? raw : preedit)
     }
@@ -128,59 +167,53 @@ final class Composer {
     /// Punctuation or a digit ends the word. Pinyin turns into the highlighted
     /// candidate, as space would; other languages keep what is shown.
     func commitBeforePunctuation() {
-        flush()
+        settle()
         if language == .chinese, !choices.isEmpty { confirm() } else { commit() }
     }
 
-    /// Whether the text before the cursor still ends with what we typed. Hosts
-    /// report our own edits back asynchronously, so a recent write counts as ours.
+    /// Whether the text before the cursor can still be ours. Hosts report our own
+    /// edits late and some report no context at all, so while the typist is
+    /// active, or when the host says nothing, the composition is kept: wrongly
+    /// ending it would lose the letters in flight.
     func owns(textBefore: String?) -> Bool {
-        shown.isEmpty || Date().timeIntervalSince(lastWrite) < 0.5 || (textBefore ?? "").hasSuffix(shown)
+        guard !shown.isEmpty, applied == generation, Date().timeIntervalSince(lastKey) > 1,
+              let textBefore, !textBefore.isEmpty else { return true }
+        return textBefore.hasSuffix(shown)
     }
 
     /// Host text changed underneath us; the shown preedit is no longer ours to replace.
     func reset() {
-        refreshPending = false; nextLetters = Self.allLetters
+        generation += 1; applied = generation; nextLetters = Self.allLetters
         raw = ""; shown = ""; preedit = ""; choices = []; correction = nil
-        correctionLanguage = nil; wordMode = 0; languageOptions = []
+        correctionLanguage = nil; wordMode = 0; languageOptions = []; alternatives = []
         onChange?()
     }
 
     /// Cycle the current word through the languages it can be read in.
     func stepLanguage() {
-        flush()
-        guard mode == 0, languageOptions.count > 1 else { return }
-        let index = languageOptions.firstIndex(of: language) ?? 0
-        wordMode = languageOptions[(index + 1) % languageOptions.count].rawValue
-        refresh()
+        settle()
+        guard !raw.isEmpty else { return }
+        let all = Language.allCases
+        let index = all.firstIndex(of: language) ?? 0
+        wordMode = all[(index + 1) % all.count].rawValue
+        scheduleRefresh()
     }
 
-    private var contextLanguage: UInt32 {
-        if !raw.isEmpty, language != .english { return language.rawValue }
-        return recentLanguages.last?.rawValue ?? 0
-    }
-
-    private func refresh() {
-        if raw.isEmpty { wordMode = 0 }
-        let result = Engine.analyze(raw, mode: wordMode != 0 ? wordMode : mode, previous: contextLanguage,
-                                    correctMode: autocorrect && wordMode == 0 ? mode : nil)
-        var mask = mode == 0 ? result.options : 0
+    /// Take over the worker's answer, unless the input has moved on since.
+    private func apply(_ reply: EngineWorker.Reply) {
+        guard reply.generation == generation, applied != generation else { return }
+        applied = generation
+        var mask = mode == 0 ? reply.options : 0
         if wordMode != 0, !raw.isEmpty { mask |= 1 << wordMode }
         languageOptions = Language.allCases.filter { mask & (1 << $0.rawValue) != 0 }
-        let lines = result.composition
-        language = lines.first.flatMap(Language.init(name:)) ?? .english
-        preedit = lines.count > 1 ? lines[1] : raw
-        var seen = Set<String>()
-        choices = lines.dropFirst(2).map(simplified).filter { seen.insert($0).inserted }
-        correction = nil
-        correctionLanguage = nil
-        if let fix = result.correction, fix.count >= 2 {
-            correctionLanguage = Language(name: fix[0])
-            let value = fix.count > 2 ? fix[2] : fix[1]
-            correction = correctionLanguage == .chinese ? simplified(value) : value
-        }
-        nextLetters = raw.isEmpty ? Self.allLetters : Engine.nextLetters(raw)
-        show(raw.isEmpty ? "" : language == .chinese ? raw : preedit)
+        language = reply.language
+        preedit = reply.preedit
+        choices = reply.choices
+        correction = reply.correction
+        correctionLanguage = reply.correctionLanguage
+        nextLetters = reply.nextLetters
+        alternatives = reply.alternatives
+        show(raw.isEmpty ? "" : preedit)
         onChange?()
     }
 
@@ -192,7 +225,7 @@ final class Composer {
             if recentLanguages.count > 3 { recentLanguages.removeFirst() }
         }
         raw = ""; preedit = ""; choices = []; correction = nil
-        correctionLanguage = nil; wordMode = 0; languageOptions = []
+        correctionLanguage = nil; wordMode = 0; languageOptions = []; alternatives = []
         nextLetters = Self.allLetters
         onChange?()
     }
@@ -204,18 +237,6 @@ final class Composer {
         let suffix = String(text.dropFirst(common))
         if !suffix.isEmpty { output?.insertText(suffix) }
         shown = text
-        lastWrite = Date()
-    }
-
-    // ICU transforms cost ~0.1 ms each and the same candidates recur on every keystroke.
-    private var simplifiedCache: [String: String] = [:]
-
-    private func simplified(_ text: String) -> String {
-        if let hit = simplifiedCache[text] { return hit }
-        let value = text.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? text
-        if simplifiedCache.count > 2000 { simplifiedCache.removeAll() }
-        simplifiedCache[text] = value
-        return value
     }
 }
 

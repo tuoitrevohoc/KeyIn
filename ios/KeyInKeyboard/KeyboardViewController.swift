@@ -21,26 +21,16 @@ final class KeyboardViewController: UIInputViewController, TextOutput {
     }
 
     // The system's edge gestures on the keyboard window hold back touches on
-    // the outer keys (q, a, p, l, shift, backspace, bottom row) until they
-    // fail, which reads as lag and reordered or dropped letters when typing
-    // fast. Keys need every touch immediately.
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        var recognizers = view.window?.gestureRecognizers ?? []
-        var superview = view.superview
-        while let current = superview {
-            recognizers += current.gestureRecognizers ?? []
-            superview = current.superview
-        }
-        for recognizer in recognizers {
-            recognizer.delaysTouchesBegan = false
-            recognizer.delaysTouchesEnded = false
-        }
+    // the outer keys until they fail, which reads as lag when typing fast.
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        view.window?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
     }
 
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         keyboard.showsGlobe = needsInputModeSwitchKey
+        keyboard.returnTitle = returnTitle
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -56,6 +46,19 @@ final class KeyboardViewController: UIInputViewController, TextOutput {
 
     private func hostChanged() {
         if !composer.owns(textBefore: textDocumentProxy.documentContextBeforeInput) { composer.reset() }
+    }
+
+    private var returnTitle: String? {
+        switch textDocumentProxy.returnKeyType ?? .default {
+        case .go: return "Đi"
+        case .search, .google, .yahoo: return "Tìm"
+        case .send: return "Gửi"
+        case .done: return "Xong"
+        case .next: return "Tiếp"
+        case .join: return "Tham gia"
+        case .route: return "Đi"
+        default: return nil
+        }
     }
 
     func insertText(_ text: String) { textDocumentProxy.insertText(text) }

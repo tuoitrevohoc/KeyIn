@@ -1,8 +1,8 @@
 import UIKit
 
 /// QWERTY keyboard with a candidate bar, shared by the keyboard extension and
-/// the container app's playground. Touches go to the nearest key, so the gaps
-/// between keys never swallow a tap.
+/// the container app's playground. The whole view takes touches, and each goes
+/// to the nearest key.
 final class KeyboardView: UIView {
     enum Key: Equatable {
         case character(String)
@@ -15,6 +15,8 @@ final class KeyboardView: UIView {
     var showsGlobe = true { didSet { if showsGlobe != oldValue { rebuild() } } }
     var onGlobe: ((UIView, UIEvent) -> Void)?
     var onEnter: (() -> Void)?
+    /// The host's return key title; nil shows the plain return arrow.
+    var returnTitle: String? { didSet { if returnTitle != oldValue { rebuild() } } }
     var output: TextOutput? { composer.output }
 
     private let bar = UIScrollView()
@@ -22,7 +24,6 @@ final class KeyboardView: UIView {
     // candidate on every key was the main cost of typing Chinese.
     private var chips: [UIButton] = []
     private var chipActions: [() -> Void] = []
-    private let preview = UILabel()
     private let keyArea = UIView()
     private var keyViews: [(key: Key, view: UILabel)] = []
     private var page = Page.letters
@@ -40,7 +41,9 @@ final class KeyboardView: UIView {
     init(composer: Composer) {
         self.composer = composer
         super.init(frame: .zero)
-        backgroundColor = .clear
+        // Touches on fully transparent pixels of a keyboard extension never
+        // reach it, which silently lost every tap between two keys.
+        backgroundColor = UIColor.white.withAlphaComponent(0.001)
         bar.showsHorizontalScrollIndicator = false
         if #available(iOS 26.0, *) {
             // The default soft edge effect blurs the whole bar inside a keyboard.
@@ -48,9 +51,6 @@ final class KeyboardView: UIView {
                 edge.isHidden = true
             }
         }
-        preview.textColor = .secondaryLabel
-        preview.font = .systemFont(ofSize: 17)
-        bar.addSubview(preview)
         addSubview(bar)
         addSubview(keyArea)
         isMultipleTouchEnabled = true
@@ -100,7 +100,7 @@ final class KeyboardView: UIView {
     }
 
     private var bottomRow: [Key] {
-        [page == .letters ? .layer : .letters] + (showsGlobe ? [.globe] : []) + [.space, .enter]
+        [page == .letters ? .layer : .letters] + (showsGlobe ? [.globe] : []) + [.space, .character("."), .enter]
     }
 
     private func rebuild() {
@@ -118,8 +118,11 @@ final class KeyboardView: UIView {
         keyViews = keys.map { key in
             let label = UILabel()
             label.textAlignment = .center
-            label.layer.cornerRadius = 6
-            label.layer.masksToBounds = true
+            label.layer.cornerRadius = 8.5
+            label.layer.shadowColor = UIColor.black.cgColor
+            label.layer.shadowOpacity = 0.3
+            label.layer.shadowRadius = 0
+            label.layer.shadowOffset = CGSize(width: 0, height: 1)
             label.isUserInteractionEnabled = false
             configure(label, for: key)
             keyArea.addSubview(label)
@@ -128,39 +131,65 @@ final class KeyboardView: UIView {
         setNeedsLayout()
     }
 
+    private static let specialKeyColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(white: 0.28, alpha: 1)
+            : UIColor(red: 0.67, green: 0.70, blue: 0.74, alpha: 1)
+    }
+    private static let letterKeyColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white
+    }
+
     private func configure(_ label: UILabel, for key: Key) {
-        let special = !(key == .space || { if case .character = key { return true }; return false }())
-        label.backgroundColor = special ? .systemGray3 : .systemBackground
+        var color = Self.specialKeyColor
         label.textColor = .label
-        label.font = .systemFont(ofSize: special ? 16 : 22)
+        label.font = .systemFont(ofSize: 16)
         switch key {
-        case .character(let text): label.text = text
-        case .shift: label.text = capsLock ? "⇪" : (shifted ? "⬆︎" : "⇧")
-        case .backspace: label.text = "⌫"
+        case .character(let text):
+            color = Self.letterKeyColor
+            label.text = text
+            label.font = .systemFont(ofSize: 25)
+        case .shift:
+            if shifted { color = Self.letterKeyColor }
+            setIcon(capsLock ? "capslock.fill" : shifted ? "shift.fill" : "shift", on: label)
+        case .backspace: setIcon("delete.left", on: label)
         case .layer: label.text = page == .letters ? "123" : (page == .numbers ? "#+=" : "123")
         case .letters: label.text = "ABC"
-        case .globe: label.text = "🌐"
-        case .space: label.text = composer.mode == 0 ? "KeyIn" : "KeyIn · \(Language(rawValue: composer.mode)?.flag ?? "")"
-            label.font = .systemFont(ofSize: 15); label.textColor = .secondaryLabel
-        case .enter: label.text = "↵"
+        case .globe: setIcon("globe", on: label)
+        case .space:
+            color = Self.letterKeyColor
+            let flag = Language(rawValue: composer.mode)?.flag
+            label.text = flag.map { "\($0) dấu cách" } ?? "dấu cách"
+        case .enter:
+            if let returnTitle {
+                color = .systemBlue
+                label.text = returnTitle
+                label.textColor = .white
+            } else {
+                setIcon("return.left", on: label)
+            }
         }
+        label.backgroundColor = .clear
+        label.layer.backgroundColor = color.resolvedColor(with: traitCollection).cgColor
+    }
+
+    private func setIcon(_ name: String, on label: UILabel) {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+        guard let image = UIImage(systemName: name, withConfiguration: configuration)?
+            .withTintColor(.label, renderingMode: .alwaysOriginal) else { return }
+        let attachment = NSTextAttachment(image: image)
+        attachment.bounds = CGRect(x: 0, y: -2, width: image.size.width, height: image.size.height)
+        label.attributedText = NSAttributedString(attachment: attachment)
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        rebuild()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         bar.frame = CGRect(x: 0, y: 0, width: bounds.width, height: Self.barHeight)
-        var x: CGFloat = 6
-        for chip in chips.prefix(chipActions.count) {
-            let width = (chip.titleLabel?.intrinsicContentSize.width ?? 0) + 24
-            chip.frame = CGRect(x: x, y: (Self.barHeight - 34) / 2, width: width, height: 34)
-            x += width + 4
-        }
-        if !preview.isHidden {
-            let width = preview.intrinsicContentSize.width
-            preview.frame = CGRect(x: x, y: 0, width: width, height: Self.barHeight)
-            x += width
-        }
-        bar.contentSize = CGSize(width: x + 6, height: Self.barHeight)
+        layoutBar()
         keyArea.frame = CGRect(x: 0, y: Self.barHeight, width: bounds.width, height: bounds.height - Self.barHeight)
 
         let gap: CGFloat = 6, side: CGFloat = 3
@@ -170,20 +199,40 @@ final class KeyboardView: UIView {
             let widths = row.map { width(of: $0, in: row, unit: unit) }
             let total = widths.reduce(0, +)
             var x = (bounds.width - total) / 2
-            for w in widths {
-                keyViews[index].view.frame = CGRect(x: x + gap / 2, y: CGFloat(r) * Self.rowHeight + 5,
-                                                    width: w - gap, height: Self.rowHeight - 10)
+            for (column, w) in widths.enumerated() {
+                var frame = CGRect(x: x + gap / 2, y: CGFloat(r) * Self.rowHeight + 5,
+                                   width: w - gap, height: Self.rowHeight - 10)
+                // Shift and backspace stand clear of the letters, at the edges.
+                if row.contains(.shift), row[column] == .shift || row[column] == .backspace {
+                    let narrow = unit * 1.12
+                    if row[column] == .backspace { frame.origin.x = frame.maxX - narrow }
+                    frame.size.width = narrow
+                }
+                keyViews[index].view.frame = frame
+                keyViews[index].view.layer.shadowPath = UIBezierPath(
+                    roundedRect: CGRect(origin: .zero, size: frame.size), cornerRadius: 8.5).cgPath
                 x += w; index += 1
             }
         }
+    }
+
+    /// Candidates change on every keystroke; the keys do not.
+    private func layoutBar() {
+        var x: CGFloat = 6
+        for chip in chips.prefix(chipActions.count) {
+            let width = (chip.titleLabel?.intrinsicContentSize.width ?? 0) + 24
+            chip.frame = CGRect(x: x, y: (Self.barHeight - 34) / 2, width: width, height: 34)
+            x += width + 4
+        }
+        bar.contentSize = CGSize(width: x + 6, height: Self.barHeight)
     }
 
     private func width(of key: Key, in row: [Key], unit: CGFloat) -> CGFloat {
         let fixed = row.filter { $0 != .space }.count
         switch key {
         case .shift, .backspace: return unit * 1.5
-        case .layer, .letters, .globe: return unit * 1.25
-        case .enter: return unit * 2
+        case .layer, .letters, .globe: return unit * (row.contains(.space) ? 1.1 : 1.25)
+        case .enter: return unit * 1.75
         case .space:
             let others = row.filter { $0 != .space }.map { width(of: $0, in: row, unit: unit) }.reduce(0, +)
             return unit * 10 - others
@@ -264,10 +313,22 @@ final class KeyboardView: UIView {
         bubble.isHidden = false
     }
 
+    /// Thumbs land below what they aim at on the upper rows and above it on the
+    /// bottom row, so rows are hit-tested where fingers actually land. The
+    /// stops map row boundaries measured on a device (60, 110, 158) to the drawn ones.
+    private static func aimedY(_ y: CGFloat) -> CGFloat {
+        let stops: [(landed: CGFloat, drawn: CGFloat)] = [(0, 0), (60, 54), (110, 108), (158, 162), (216, 216)]
+        for (low, high) in zip(stops, stops.dropFirst()) where y <= high.landed {
+            return low.drawn + (y - low.landed) * (high.drawn - low.drawn) / (high.landed - low.landed)
+        }
+        return y
+    }
+
     /// The key under `point`. Letters that can follow what is being typed get a
     /// slightly larger target, so a touch near the border of two keys goes to
     /// the one that makes sense ("zh" then a/e/i/o/u rather than their neighbours).
-    private func keyAt(_ point: CGPoint) -> (key: Key, view: UILabel)? {
+    private func keyAt(_ landing: CGPoint) -> (key: Key, view: UILabel)? {
+        let point = CGPoint(x: landing.x, y: Self.aimedY(landing.y))
         guard let plain = keyViews.min(by: { distance(point, $0.view.frame) < distance(point, $1.view.frame) }) else {
             return nil
         }
@@ -281,7 +342,7 @@ final class KeyboardView: UIView {
             let dx = (point.x - frame.midX) / frame.width, dy = (point.y - frame.midY) / frame.height
             let d = (dx * dx + dy * dy).squareRoot()
             guard d < 0.9 else { return nil }
-            return likely & (1 << (c.value - 97)) != 0 ? d * 0.75 : d
+            return likely & (1 << (c.value - 97)) != 0 ? d * 0.7 : d
         }
         return keyViews.compactMap { entry in score(entry).map { (entry, $0) } }
             .min { $0.1 < $1.1 }?.0 ?? plain
@@ -333,10 +394,11 @@ final class KeyboardView: UIView {
         case .globe:
             break
         case .space:
-            if composer.isComposing { composer.confirm() }
+            composer.confirm()
             output?.insertText(" ")
             if page != .letters { page = .letters; rebuild() }
         case .enter:
+            composer.settle()
             if composer.isComposing { composer.confirm() } else if let onEnter { onEnter() } else { output?.insertText("\n") }
         }
     }
@@ -347,20 +409,30 @@ final class KeyboardView: UIView {
 
     private func updateBar() {
         var items: [(title: String, style: ChipStyle, action: () -> Void)] = []
-        preview.isHidden = true
         if composer.isComposing {
+            // The flag cycles the word through every language, likely or not.
             items.append((composer.language.flag, .flag, { [weak self] in self?.composer.stepLanguage() }))
             // The candidate that space would insert is shown in bold.
             if let correction = composer.correction {
-                items.append(("✓ " + correction, .selected, { [weak self] in self?.composer.confirm() }))
+                let mark = composer.correctionLanguage?.flag ?? "✓"
+                items.append(("\(mark) \(correction)", .selected, { [weak self] in self?.composer.confirm() }))
+                if composer.choices.isEmpty {
+                    // What was typed stays one tap away ("ios" next to "ói").
+                    let typed = "\(composer.language.flag) \(composer.preedit)"
+                    items.append((typed, .plain, { [weak self] in self?.composer.commit() }))
+                }
             }
             for (i, choice) in composer.choices.prefix(30).enumerated() {
                 let style: ChipStyle = i == 0 && composer.correction == nil ? .selected : .plain
                 items.append((choice, style, { [weak self] in self?.composer.choose(i) }))
             }
             if composer.choices.isEmpty, composer.correction == nil {
-                preview.text = composer.preedit
-                preview.isHidden = false
+                items.append((composer.preedit, .selected, { [weak self] in self?.composer.confirm() }))
+            }
+            for (i, alternative) in composer.alternatives.enumerated() {
+                items.append(("\(alternative.language.flag) \(alternative.text)", .plain, { [weak self] in
+                    self?.composer.chooseAlternative(i)
+                }))
             }
         } else {
             let modes = [(UInt32(0), L("Tự động", "Auto"))] + Language.allCases.map { ($0.rawValue, $0.flag) }
@@ -394,7 +466,7 @@ final class KeyboardView: UIView {
         chips.dropFirst(items.count).forEach { $0.isHidden = true }
         chipActions = items.map(\.action)
         bar.setContentOffset(.zero, animated: false)
-        setNeedsLayout()
+        layoutBar()
     }
 
     @objc private func chipTapped(_ chip: UIButton) {
