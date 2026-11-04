@@ -333,10 +333,11 @@ final class KeyboardView: UIView {
         case .globe:
             break
         case .space:
-            if composer.isComposing { composer.confirm() }
+            composer.confirm()
             output?.insertText(" ")
             if page != .letters { page = .letters; rebuild() }
         case .enter:
+            composer.settle()
             if composer.isComposing { composer.confirm() } else if let onEnter { onEnter() } else { output?.insertText("\n") }
         }
     }
