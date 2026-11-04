@@ -22,7 +22,6 @@ final class KeyboardView: UIView {
     // candidate on every key was the main cost of typing Chinese.
     private var chips: [UIButton] = []
     private var chipActions: [() -> Void] = []
-    private let preview = UILabel()
     private let keyArea = UIView()
     private var keyViews: [(key: Key, view: UILabel)] = []
     private var page = Page.letters
@@ -50,9 +49,6 @@ final class KeyboardView: UIView {
                 edge.isHidden = true
             }
         }
-        preview.textColor = .secondaryLabel
-        preview.font = .systemFont(ofSize: 17)
-        bar.addSubview(preview)
         addSubview(bar)
         addSubview(keyArea)
         isMultipleTouchEnabled = true
@@ -177,11 +173,6 @@ final class KeyboardView: UIView {
             chip.frame = CGRect(x: x, y: (Self.barHeight - 34) / 2, width: width, height: 34)
             x += width + 4
         }
-        if !preview.isHidden {
-            let width = preview.intrinsicContentSize.width
-            preview.frame = CGRect(x: x, y: 0, width: width, height: Self.barHeight)
-            x += width
-        }
         bar.contentSize = CGSize(width: x + 6, height: Self.barHeight)
     }
 
@@ -273,9 +264,9 @@ final class KeyboardView: UIView {
 
     /// Thumbs land below what they aim at on the upper rows and above it on the
     /// bottom row, so rows are hit-tested where fingers actually land. The
-    /// stops map measured row boundaries (62, 118, 160) to the drawn ones.
+    /// stops map row boundaries measured on a device (60, 110, 158) to the drawn ones.
     private static func aimedY(_ y: CGFloat) -> CGFloat {
-        let stops: [(landed: CGFloat, drawn: CGFloat)] = [(0, 0), (62, 54), (118, 108), (160, 162), (216, 216)]
+        let stops: [(landed: CGFloat, drawn: CGFloat)] = [(0, 0), (60, 54), (110, 108), (158, 162), (216, 216)]
         for (low, high) in zip(stops, stops.dropFirst()) where y <= high.landed {
             return low.drawn + (y - low.landed) * (high.drawn - low.drawn) / (high.landed - low.landed)
         }
@@ -367,20 +358,30 @@ final class KeyboardView: UIView {
 
     private func updateBar() {
         var items: [(title: String, style: ChipStyle, action: () -> Void)] = []
-        preview.isHidden = true
         if composer.isComposing {
+            // The flag cycles the word through every language, likely or not.
             items.append((composer.language.flag, .flag, { [weak self] in self?.composer.stepLanguage() }))
             // The candidate that space would insert is shown in bold.
             if let correction = composer.correction {
-                items.append(("✓ " + correction, .selected, { [weak self] in self?.composer.confirm() }))
+                let mark = composer.correctionLanguage?.flag ?? "✓"
+                items.append(("\(mark) \(correction)", .selected, { [weak self] in self?.composer.confirm() }))
+                if composer.choices.isEmpty {
+                    // What was typed stays one tap away ("ios" next to "ói").
+                    let typed = "\(composer.language.flag) \(composer.preedit)"
+                    items.append((typed, .plain, { [weak self] in self?.composer.commit() }))
+                }
             }
             for (i, choice) in composer.choices.prefix(30).enumerated() {
                 let style: ChipStyle = i == 0 && composer.correction == nil ? .selected : .plain
                 items.append((choice, style, { [weak self] in self?.composer.choose(i) }))
             }
             if composer.choices.isEmpty, composer.correction == nil {
-                preview.text = composer.preedit
-                preview.isHidden = false
+                items.append((composer.preedit, .selected, { [weak self] in self?.composer.confirm() }))
+            }
+            for (i, alternative) in composer.alternatives.enumerated() {
+                items.append(("\(alternative.language.flag) \(alternative.text)", .plain, { [weak self] in
+                    self?.composer.chooseAlternative(i)
+                }))
             }
         } else {
             let modes = [(UInt32(0), "Tự động")] + Language.allCases.map { ($0.rawValue, $0.flag) }

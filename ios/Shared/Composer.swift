@@ -32,8 +32,7 @@ enum Language: UInt32, CaseIterable {
 /// hardware key events. The word being typed goes straight into the document
 /// and only the part that changed is rewritten. Marked (underlined) text was
 /// tried and dropped: hosts reflow the line when it appears and disappears.
-/// Pinyin is shown as the raw keystrokes, so typing it only ever appends a
-/// letter; the syllable-separated reading is on the candidate bar.
+/// Pinyin shows its syllable separators, as on the desktop.
 ///
 /// Keystrokes update `raw` at once on the main thread, which then only hands
 /// the input to `EngineWorker`, so touches are never held up by the engine.
@@ -53,7 +52,9 @@ final class Composer {
     private(set) var choices: [String] = []
     private(set) var correction: String?
     private(set) var languageOptions: [Language] = []
-    private var correctionLanguage: Language?
+    /// The word's reading in the other languages it could be.
+    private(set) var alternatives: [EngineWorker.Alternative] = []
+    private(set) var correctionLanguage: Language?
     private var wordMode: UInt32 = 0
     /// What this composition has typed into the document so far.
     private var shown = ""
@@ -101,6 +102,7 @@ final class Composer {
         let next = EngineWorker.Request(
             generation: generation, raw: raw, mode: wordMode != 0 ? wordMode : mode,
             previous: recentLanguages.last?.rawValue ?? 0, carried: settled ? language : nil,
+            offersAlternatives: mode == 0,
             correctMode: autocorrect && wordMode == 0 ? mode : nil)
         request = next
         worker.submit(next)
@@ -127,6 +129,20 @@ final class Composer {
             value = language == .chinese ? raw : preedit
         }
         finish(value)
+    }
+
+    /// Take another language's reading. Chinese still needs a candidate picked.
+    func chooseAlternative(_ index: Int) {
+        settle()
+        guard alternatives.indices.contains(index) else { return }
+        let alternative = alternatives[index]
+        if alternative.language == .chinese {
+            wordMode = alternative.language.rawValue
+            scheduleRefresh()
+        } else {
+            language = alternative.language
+            finish(alternative.text)
+        }
     }
 
     func choose(_ index: Int) {
@@ -163,16 +179,17 @@ final class Composer {
     func reset() {
         generation += 1; applied = generation; nextLetters = Self.allLetters
         raw = ""; shown = ""; preedit = ""; choices = []; correction = nil
-        correctionLanguage = nil; wordMode = 0; languageOptions = []
+        correctionLanguage = nil; wordMode = 0; languageOptions = []; alternatives = []
         onChange?()
     }
 
     /// Cycle the current word through the languages it can be read in.
     func stepLanguage() {
         settle()
-        guard mode == 0, languageOptions.count > 1 else { return }
-        let index = languageOptions.firstIndex(of: language) ?? 0
-        wordMode = languageOptions[(index + 1) % languageOptions.count].rawValue
+        guard !raw.isEmpty else { return }
+        let all = Language.allCases
+        let index = all.firstIndex(of: language) ?? 0
+        wordMode = all[(index + 1) % all.count].rawValue
         scheduleRefresh()
     }
 
@@ -189,7 +206,8 @@ final class Composer {
         correction = reply.correction
         correctionLanguage = reply.correctionLanguage
         nextLetters = reply.nextLetters
-        show(raw.isEmpty ? "" : language == .chinese ? raw : preedit)
+        alternatives = reply.alternatives
+        show(raw.isEmpty ? "" : preedit)
         onChange?()
     }
 
@@ -201,7 +219,7 @@ final class Composer {
             if recentLanguages.count > 3 { recentLanguages.removeFirst() }
         }
         raw = ""; preedit = ""; choices = []; correction = nil
-        correctionLanguage = nil; wordMode = 0; languageOptions = []
+        correctionLanguage = nil; wordMode = 0; languageOptions = []; alternatives = []
         nextLetters = Self.allLetters
         onChange?()
     }

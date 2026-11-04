@@ -19,7 +19,13 @@ final class EngineWorker {
         /// The language so far when the caller knows it, that is, when no
         /// other request is still in flight. Otherwise the worker tracks it.
         var carried: Language?
+        var offersAlternatives: Bool
         var correctMode: UInt32?
+    }
+
+    struct Alternative {
+        var language: Language
+        var text: String
     }
 
     struct Reply {
@@ -31,6 +37,7 @@ final class EngineWorker {
         var correction: String?
         var correctionLanguage: Language?
         var nextLetters: UInt32
+        var alternatives: [Alternative]
     }
 
     /// Called on the main thread.
@@ -130,14 +137,25 @@ final class EngineWorker {
             let value = fix.count > 2 ? fix[2] : fix[1]
             correction = correctionLanguage == .chinese ? simplified(value) : value
         }
+        let detected = lines.first.flatMap(Language.init(name:)) ?? .english
+        let preedit = lines.count > 1 ? lines[1] : raw
+        var alternatives: [Alternative] = []
+        if request.offersAlternatives {
+            for other in Language.allCases where other != detected && result.options & (1 << other.rawValue) != 0 {
+                let reading = Engine.analyze(raw, mode: other.rawValue, previous: previous, correctMode: nil).composition
+                let text = other == .chinese ? reading.dropFirst(2).first.map(simplified) : reading.dropFirst().first
+                if let text, text != preedit, text != correction { alternatives.append(Alternative(language: other, text: text)) }
+            }
+        }
         return Reply(
             generation: request.generation,
             options: result.options,
-            language: lines.first.flatMap(Language.init(name:)) ?? .english,
-            preedit: lines.count > 1 ? lines[1] : raw,
+            language: detected,
+            preedit: preedit,
             choices: lines.dropFirst(2).map(simplified).filter { seen.insert($0).inserted },
             correction: correction,
             correctionLanguage: correctionLanguage,
-            nextLetters: raw.isEmpty ? Composer.allLetters : Engine.nextLetters(raw))
+            nextLetters: raw.isEmpty ? Composer.allLetters : Engine.nextLetters(raw),
+            alternatives: alternatives)
     }
 }
