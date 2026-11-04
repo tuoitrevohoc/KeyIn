@@ -30,6 +30,7 @@ final class KeyboardViewController: UIInputViewController, TextOutput {
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         keyboard.showsGlobe = needsInputModeSwitchKey
+        keyboard.returnTitle = returnTitle
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -45,6 +46,19 @@ final class KeyboardViewController: UIInputViewController, TextOutput {
 
     private func hostChanged() {
         if !composer.owns(textBefore: textDocumentProxy.documentContextBeforeInput) { composer.reset() }
+    }
+
+    private var returnTitle: String? {
+        switch textDocumentProxy.returnKeyType ?? .default {
+        case .go: return "Đi"
+        case .search, .google, .yahoo: return "Tìm"
+        case .send: return "Gửi"
+        case .done: return "Xong"
+        case .next: return "Tiếp"
+        case .join: return "Tham gia"
+        case .route: return "Đi"
+        default: return nil
+        }
     }
 
     func insertText(_ text: String) { textDocumentProxy.insertText(text) }

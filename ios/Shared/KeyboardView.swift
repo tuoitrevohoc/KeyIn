@@ -15,6 +15,8 @@ final class KeyboardView: UIView {
     var showsGlobe = true { didSet { if showsGlobe != oldValue { rebuild() } } }
     var onGlobe: ((UIView, UIEvent) -> Void)?
     var onEnter: (() -> Void)?
+    /// The host's return key title; nil shows the plain return arrow.
+    var returnTitle: String? { didSet { if returnTitle != oldValue { rebuild() } } }
     var output: TextOutput? { composer.output }
 
     private let bar = UIScrollView()
@@ -98,7 +100,7 @@ final class KeyboardView: UIView {
     }
 
     private var bottomRow: [Key] {
-        [page == .letters ? .layer : .letters] + (showsGlobe ? [.globe] : []) + [.space, .enter]
+        [page == .letters ? .layer : .letters] + (showsGlobe ? [.globe] : []) + [.space, .character("."), .enter]
     }
 
     private func rebuild() {
@@ -116,8 +118,11 @@ final class KeyboardView: UIView {
         keyViews = keys.map { key in
             let label = UILabel()
             label.textAlignment = .center
-            label.layer.cornerRadius = 6
-            label.layer.masksToBounds = true
+            label.layer.cornerRadius = 8.5
+            label.layer.shadowColor = UIColor.black.cgColor
+            label.layer.shadowOpacity = 0.3
+            label.layer.shadowRadius = 0
+            label.layer.shadowOffset = CGSize(width: 0, height: 1)
             label.isUserInteractionEnabled = false
             configure(label, for: key)
             keyArea.addSubview(label)
@@ -126,22 +131,59 @@ final class KeyboardView: UIView {
         setNeedsLayout()
     }
 
+    private static let specialKeyColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(white: 0.28, alpha: 1)
+            : UIColor(red: 0.67, green: 0.70, blue: 0.74, alpha: 1)
+    }
+    private static let letterKeyColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white
+    }
+
     private func configure(_ label: UILabel, for key: Key) {
-        let special = !(key == .space || { if case .character = key { return true }; return false }())
-        label.backgroundColor = special ? .systemGray3 : .systemBackground
+        var color = Self.specialKeyColor
         label.textColor = .label
-        label.font = .systemFont(ofSize: special ? 16 : 22)
+        label.font = .systemFont(ofSize: 16)
         switch key {
-        case .character(let text): label.text = text
-        case .shift: label.text = capsLock ? "⇪" : (shifted ? "⬆︎" : "⇧")
-        case .backspace: label.text = "⌫"
+        case .character(let text):
+            color = Self.letterKeyColor
+            label.text = text
+            label.font = .systemFont(ofSize: 25)
+        case .shift:
+            if shifted { color = Self.letterKeyColor }
+            setIcon(capsLock ? "capslock.fill" : shifted ? "shift.fill" : "shift", on: label)
+        case .backspace: setIcon("delete.left", on: label)
         case .layer: label.text = page == .letters ? "123" : (page == .numbers ? "#+=" : "123")
         case .letters: label.text = "ABC"
-        case .globe: label.text = "🌐"
-        case .space: label.text = composer.mode == 0 ? "KeyIn" : "KeyIn · \(Language(rawValue: composer.mode)?.flag ?? "")"
-            label.font = .systemFont(ofSize: 15); label.textColor = .secondaryLabel
-        case .enter: label.text = "↵"
+        case .globe: setIcon("globe", on: label)
+        case .space:
+            color = Self.letterKeyColor
+            let flag = Language(rawValue: composer.mode)?.flag
+            label.text = flag.map { "\($0) dấu cách" } ?? "dấu cách"
+        case .enter:
+            if let returnTitle {
+                color = .systemBlue
+                label.text = returnTitle
+                label.textColor = .white
+            } else {
+                setIcon("return.left", on: label)
+            }
         }
+        label.backgroundColor = .clear
+        label.layer.backgroundColor = color.resolvedColor(with: traitCollection).cgColor
+    }
+
+    private func setIcon(_ name: String, on label: UILabel) {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+        guard let image = UIImage(systemName: name, withConfiguration: configuration)?
+            .withTintColor(.label, renderingMode: .alwaysOriginal) else { return }
+        let attachment = NSTextAttachment(image: image)
+        attachment.bounds = CGRect(x: 0, y: -2, width: image.size.width, height: image.size.height)
+        label.attributedText = NSAttributedString(attachment: attachment)
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        rebuild()
     }
 
     override func layoutSubviews() {
@@ -157,9 +199,18 @@ final class KeyboardView: UIView {
             let widths = row.map { width(of: $0, in: row, unit: unit) }
             let total = widths.reduce(0, +)
             var x = (bounds.width - total) / 2
-            for w in widths {
-                keyViews[index].view.frame = CGRect(x: x + gap / 2, y: CGFloat(r) * Self.rowHeight + 5,
-                                                    width: w - gap, height: Self.rowHeight - 10)
+            for (column, w) in widths.enumerated() {
+                var frame = CGRect(x: x + gap / 2, y: CGFloat(r) * Self.rowHeight + 5,
+                                   width: w - gap, height: Self.rowHeight - 10)
+                // Shift and backspace stand clear of the letters, at the edges.
+                if row.contains(.shift), row[column] == .shift || row[column] == .backspace {
+                    let narrow = unit * 1.12
+                    if row[column] == .backspace { frame.origin.x = frame.maxX - narrow }
+                    frame.size.width = narrow
+                }
+                keyViews[index].view.frame = frame
+                keyViews[index].view.layer.shadowPath = UIBezierPath(
+                    roundedRect: CGRect(origin: .zero, size: frame.size), cornerRadius: 8.5).cgPath
                 x += w; index += 1
             }
         }
@@ -180,8 +231,8 @@ final class KeyboardView: UIView {
         let fixed = row.filter { $0 != .space }.count
         switch key {
         case .shift, .backspace: return unit * 1.5
-        case .layer, .letters, .globe: return unit * 1.25
-        case .enter: return unit * 2
+        case .layer, .letters, .globe: return unit * (row.contains(.space) ? 1.1 : 1.25)
+        case .enter: return unit * 1.75
         case .space:
             let others = row.filter { $0 != .space }.map { width(of: $0, in: row, unit: unit) }.reduce(0, +)
             return unit * 10 - others
