@@ -40,7 +40,7 @@ the MSIs as artifacts.
 3. Switch to KeyIn with **Win+Space**. The taskbar button shows `A` (Auto) or the pinned
    language; left-click cycles Auto → EN → VI → 中, right-click opens a quick menu.
 4. Settings (languages, Auto, autocorrect, Tab shortcuts, Chinese learning and meanings)
-   open from **Start → KeyIn Settings**, the quick menu's **Tùy chỉnh…**, or **Options**
+   open from **Start → KeyIn Settings**, the quick menu's **Settings…** (**Tùy chỉnh…** on a Vietnamese system), or **Options**
    for the KeyIn keyboard in Windows language settings. Changes apply from the next word.
 
 Typing works as on macOS: Telex for Vietnamese, Pinyin for Chinese, 1–9 / Space to

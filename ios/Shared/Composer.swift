@@ -7,6 +7,12 @@ protocol TextOutput: AnyObject {
     func deleteBackward()
 }
 
+/// UI text follows the system language: Vietnamese when the first preferred language
+/// is Vietnamese, English otherwise.
+let vietnameseUI = Locale.preferredLanguages.first?.hasPrefix("vi") ?? false
+
+func L(_ vietnamese: String, _ english: String) -> String { vietnameseUI ? vietnamese : english }
+
 enum Language: UInt32, CaseIterable {
     case english = 1, vietnamese = 2, chinese = 3
 

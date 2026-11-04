@@ -12,20 +12,22 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Bật bàn phím KeyIn") {
-                    Text("Cài đặt › Cài đặt chung › Bàn phím › Bàn phím › Thêm bàn phím mới… › KeyIn")
-                    Button("Mở Cài đặt") {
+                Section(L("Bật bàn phím KeyIn", "Turn on the KeyIn keyboard")) {
+                    Text(L("Cài đặt › Cài đặt chung › Bàn phím › Bàn phím › Thêm bàn phím mới… › KeyIn",
+                           "Settings › General › Keyboard › Keyboards › Add New Keyboard… › KeyIn"))
+                    Button(L("Mở Cài đặt", "Open Settings")) {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(url)
                         }
                     }
                 }
-                Section("Thử ngay trong app") {
+                Section(L("Thử ngay trong app", "Try it here")) {
                     Playground().frame(height: 380)
                         .listRowInsets(EdgeInsets())
                 }
-                Section("Cách gõ") {
-                    Text("Gõ Telex như bình thường; KeyIn tự nhận ra tiếng Việt, tiếng Anh hoặc pinyin. Chạm nhãn ngôn ngữ trên thanh gợi ý để đổi cách đọc của từ đang gõ.")
+                Section(L("Cách gõ", "How to type")) {
+                    Text(L("Gõ Telex như bình thường; KeyIn tự nhận ra tiếng Việt, tiếng Anh hoặc pinyin. Chạm nhãn ngôn ngữ trên thanh gợi ý để đổi cách đọc của từ đang gõ.",
+                           "Type as usual (Vietnamese with Telex); KeyIn recognises Vietnamese, English or pinyin by itself. Tap the language label on the suggestion bar to change how the current word is read."))
                 }
             }
             .navigationTitle("KeyIn")

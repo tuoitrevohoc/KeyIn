@@ -20,7 +20,9 @@ if [[ -n "${KEYIN_APP_IDENTITY:-}" ]]; then
     codesign --force --timestamp --options runtime --sign "$KEYIN_APP_IDENTITY" "$staged_app"
 fi
 codesign --verify --deep --strict "$staged_app"
-cat > "$staging/resources/welcome.txt" <<TEXT
+# Installer text in English and Vietnamese; Installer shows the one matching the system language.
+mkdir -p "$staging/resources/en.lproj" "$staging/resources/vi.lproj"
+cat > "$staging/resources/en.lproj/welcome.txt" <<TEXT
 KeyIn $version — experimental preview
 Requires Apple Silicon and macOS $minimum or later.
 
@@ -29,15 +31,34 @@ This installer installs KeyIn for all users. If you previously installed KeyIn i
 to a backup folder first to avoid duplicate input methods.
 No typing history or preferences are removed.
 TEXT
-cat > "$staging/resources/conclusion.txt" <<'TEXT'
+cat > "$staging/resources/en.lproj/conclusion.txt" <<'TEXT'
 Installation complete.
 1. Log out of macOS and log back in.
 2. Open System Settings > Keyboard > Text Input > Edit > +.
 3. Find KeyIn under Vietnamese, add it, and select KeyIn in the input menu.
 
-Languages and options: KeyIn menu > Tùy chỉnh…
+Languages and options: KeyIn menu > Settings…
 To uninstall, switch to ABC, quit KeyIn, remove it from Keyboard settings,
 and remove /Library/Input Methods/KeyIn.app.
+TEXT
+cat > "$staging/resources/vi.lproj/welcome.txt" <<TEXT
+KeyIn $version — bản thử nghiệm
+Cần máy Apple Silicon và macOS $minimum trở lên.
+
+Trước khi cài: chuyển sang bàn phím ABC và thoát KeyIn trong Activity Monitor.
+Bộ cài này cài KeyIn cho mọi người dùng. Nếu trước đây bạn đã cài KeyIn trong ~/Library/Input Methods, hãy chuyển app đó
+sang thư mục khác trước để không bị trùng bộ gõ.
+Lịch sử gõ và tùy chỉnh được giữ nguyên.
+TEXT
+cat > "$staging/resources/vi.lproj/conclusion.txt" <<'TEXT'
+Cài đặt xong.
+1. Đăng xuất khỏi macOS rồi đăng nhập lại.
+2. Mở Cài đặt hệ thống > Bàn phím > Nguồn đầu vào > Sửa > +.
+3. Tìm KeyIn trong mục Tiếng Việt, thêm vào và chọn KeyIn trên menu bàn phím.
+
+Ngôn ngữ và tùy chọn: menu KeyIn > Tùy chỉnh…
+Để gỡ cài đặt, chuyển sang ABC, thoát KeyIn, xóa KeyIn khỏi cài đặt Bàn phím,
+rồi xóa /Library/Input Methods/KeyIn.app.
 TEXT
 pkgbuild --analyze --root "$staging/root" "$staging/components.plist"
 python3 - "$staging/components.plist" <<'PYCOMP'
