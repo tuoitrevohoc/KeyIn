@@ -254,6 +254,15 @@ requiring prior personal learning. The upstream dictionary file remains unchange
 Other initial strings may have many readings; select the intended candidate and
 Rime can learn that choice when local learning is enabled.
 
+`data/rime/keyin-words.tsv` adds about 146,000 frequent words that
+`pinyin_simp` lacks (for example `越南语`, `越南人`, `韩国语`) to the same build copy
+and to the built-in table used on iOS. Without them a reading like `yuenanyu` had no
+whole-word entry, so it was assembled from unrelated high-frequency pieces
+(`月难于`). Words and frequencies come from [jieba](https://github.com/fxsjy/jieba),
+readings from [phrase-pinyin-data](https://github.com/mozillazg/phrase-pinyin-data),
+both MIT (`data/LICENSE.chinese-words`). See `data/README.chinese-words.md` and
+`scripts/import-chinese-words.py` to regenerate it.
+
 ## Choosing an ambiguous word's language
 
 While a word is being composed, **Tab** cycles its language (EN → VI → 中, skipping

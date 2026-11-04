@@ -40,7 +40,7 @@ if ($withRime) {
     # Rime schemas and dictionaries, precompiled like scripts/build.sh does on macOS.
     $rime = Join-Path $stage "rime"
     Copy-Item (Join-Path $root "data\rime\*.yaml"), (Join-Path $root "data\pinyin_simp.dict.yaml") $rime
-    Get-Content (Join-Path $root "data\rime\keyin-phrases.tsv") -Encoding UTF8 | Add-Content (Join-Path $rime "pinyin_simp.dict.yaml") -Encoding UTF8
+    Get-Content (Join-Path $root "data\rime\keyin-phrases.tsv"), (Join-Path $root "data\rime\keyin-words.tsv") -Encoding UTF8 | Add-Content (Join-Path $rime "pinyin_simp.dict.yaml") -Encoding UTF8
     & (Join-Path $librime "dist\bin\rime_deployer.exe") --build (Join-Path $out "rime-user") $rime (Join-Path $rime "build")
     if ($LASTEXITCODE -ne 0) { throw "rime_deployer failed" }
     Copy-Item (Join-Path $librime "version-info.txt") (Join-Path $stage "librime-version-info.txt")
