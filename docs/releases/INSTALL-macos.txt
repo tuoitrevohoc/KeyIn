@@ -22,7 +22,7 @@ Known limitations
   are unavailable. This release does not fix that issue. To dismiss a stuck
   panel, switch to ABC and quit KeyIn in Activity Monitor, then select it again.
 - Auto language detection is heuristic; use manual mode for ambiguous text.
-- While typing a word, Tab switches its language and Shift-Tab toggles Auto; see Tùy chỉnh… in the KeyIn menu.
+- While typing a word, Tab switches its language and Shift-Tab toggles Auto; see Settings… (Tùy chỉnh…) in the KeyIn menu.
 - Intel Macs and older macOS versions are not supported by this binary.
 
 Source, build instructions, licenses and issues:

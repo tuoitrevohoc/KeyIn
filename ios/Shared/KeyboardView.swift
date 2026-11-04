@@ -363,7 +363,7 @@ final class KeyboardView: UIView {
                 preview.isHidden = false
             }
         } else {
-            let modes = [(UInt32(0), "Tự động")] + Language.allCases.map { ($0.rawValue, $0.flag) }
+            let modes = [(UInt32(0), L("Tự động", "Auto"))] + Language.allCases.map { ($0.rawValue, $0.flag) }
             for (mode, title) in modes {
                 items.append((title, composer.mode == mode ? .active : .plain, { [weak self] in
                     self?.composer.mode = mode

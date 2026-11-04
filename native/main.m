@@ -19,6 +19,15 @@ static unsigned int firstLanguage(unsigned int mask) {
     for (unsigned int language = 1; language <= 3; language++) if (mask & (1 << language)) return language;
     return 1;
 }
+// UI text follows the system language: Vietnamese when the first preferred language is
+// Vietnamese, English otherwise.
+static BOOL vietnameseUI(void) {
+    static BOOL vietnamese;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ vietnamese = [NSLocale.preferredLanguages.firstObject hasPrefix:@"vi"]; });
+    return vietnamese;
+}
+static NSString *L(NSString *vietnamese, NSString *english) { return vietnameseUI() ? vietnamese : english; }
 static BOOL tabShortcuts(void) {
     NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
     return [d objectForKey:@"TabShortcuts"] == nil || [d boolForKey:@"TabShortcuts"];
@@ -56,21 +65,21 @@ static BOOL tabShortcuts(void) {
 
     self.languages = [NSSegmentedControl segmentedControlWithLabels:@[@"English", @"Tiếng Việt", @"中文"]
         trackingMode:NSSegmentSwitchTrackingSelectAny target:self action:@selector(toggleLanguage:)];
-    self.automatic = [self checkbox:@"Tự động nhận diện" action:@selector(toggleAutomatic:)];
-    self.autocorrect = [self checkbox:@"Tự sửa lỗi gõ" action:@selector(toggleAutocorrect:)];
-    self.tabs = [self checkbox:@"Tab đổi tiếng, ⇧Tab bật/tắt tự động" action:@selector(toggleTabs:)];
+    self.automatic = [self checkbox:L(@"Tự động nhận diện", @"Detect language automatically") action:@selector(toggleAutomatic:)];
+    self.autocorrect = [self checkbox:L(@"Tự sửa lỗi gõ", @"Fix typos") action:@selector(toggleAutocorrect:)];
+    self.tabs = [self checkbox:L(@"Tab đổi tiếng, ⇧Tab bật/tắt tự động", @"Tab switches language, ⇧Tab toggles auto") action:@selector(toggleTabs:)];
     self.meanings = [NSPopUpButton new];
-    [self.meanings addItemsWithTitles:@[@"Tắt", @"Tiếng Việt", @"English"]];
+    [self.meanings addItemsWithTitles:@[L(@"Tắt", @"Off"), @"Tiếng Việt", @"English"]];
     self.meanings.target = self; self.meanings.action = @selector(selectMeanings:);
 
     NSTextField *(^label)(NSString *) = ^(NSString *text) { return [NSTextField labelWithString:text]; };
     NSView *empty = NSGridCell.emptyContentView;
     NSGridView *grid = [NSGridView gridViewWithViews:@[
-        @[label(@"Ngôn ngữ:"), self.languages],
-        @[label(@"Gõ:"), self.automatic],
+        @[label(L(@"Ngôn ngữ:", @"Languages:")), self.languages],
+        @[label(L(@"Gõ:", @"Typing:")), self.automatic],
         @[empty, self.autocorrect],
         @[empty, self.tabs],
-        @[label(@"Nghĩa chữ Hán:"), self.meanings],
+        @[label(L(@"Nghĩa chữ Hán:", @"Chinese meanings:")), self.meanings],
     ]];
     grid.rowSpacing = 10;
     grid.columnSpacing = 8;
@@ -417,17 +426,17 @@ static NSImage *roundedMask(CGFloat radius) {
     BOOL zh = [language isEqualToString:@"Chinese"];
     NSString *badge = vi ? @"🇻🇳 VI" : (zh ? @"🇨🇳 简中" : @"🇺🇸 EN");
     // Footer: coloured language badge first, then muted key hints.
-    NSMutableArray<NSString *> *hints = [NSMutableArray arrayWithObject:self.wordMode ? @"Chọn" : (self.mode ? @"Manual" : @"Auto")];
+    NSMutableArray<NSString *> *hints = [NSMutableArray arrayWithObject:self.wordMode ? L(@"Chọn", @"Pick") : (self.mode ? @"Manual" : @"Auto")];
     if (self.correction) {
         [hints addObject:[NSString stringWithFormat:@"Space → %@", self.correction]];
-        [hints addObject:@"Esc giữ gốc"];
+        [hints addObject:L(@"Esc giữ gốc", @"Esc keep original")];
     } else if (hasChoices) {
         if (pages > 1) [hints addObject:[NSString stringWithFormat:@"%lu/%lu", self.page + 1, pages]];
-        [hints addObject:@"↑↓ 1–9 chọn"];
-        [hints addObject:@"Space nhập"];
-        if (pages > 1) [hints addObject:@"← → trang"];
+        [hints addObject:L(@"↑↓ 1–9 chọn", @"↑↓ 1–9 select")];
+        [hints addObject:L(@"Space nhập", @"Space insert")];
+        if (pages > 1) [hints addObject:L(@"← → trang", @"← → page")];
     }
-    if (self.raw.length && tabShortcuts()) [hints addObjectsFromArray:@[@"Tab đổi tiếng", @"⇧Tab Auto"]];
+    if (self.raw.length && tabShortcuts()) [hints addObjectsFromArray:@[L(@"Tab đổi tiếng", @"Tab language"), @"⇧Tab Auto"]];
     NSMutableAttributedString *statusText = [[NSMutableAttributedString alloc] initWithString:badge attributes:@{
         NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold],
         NSForegroundColorAttributeName: vi ? NSColor.systemTealColor : (zh ? NSColor.systemOrangeColor : NSColor.systemBlueColor)}];
@@ -660,7 +669,7 @@ static NSImage *roundedMask(CGFloat radius) {
 - (void)showPreferences:(id)sender { [KeyInSettings.shared show]; }
 - (NSMenu *)menu {
     NSMenu *menu = [NSMenu new];
-    [menu addItemWithTitle:@"Tùy chỉnh…" action:@selector(showPreferences:) keyEquivalent:@","];
+    [menu addItemWithTitle:L(@"Tùy chỉnh…", @"Settings…") action:@selector(showPreferences:) keyEquivalent:@","];
     return menu;
 }
 @end

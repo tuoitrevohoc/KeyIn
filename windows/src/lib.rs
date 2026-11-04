@@ -34,6 +34,27 @@ pub const PROFILE_KEYIN: GUID = GUID::from_u128(0x32967ad9_29d0_4724_99cd_26c0a0
 /// The KeyIn logo, embedded by build.rs from assets/keyin.ico.
 pub(crate) const ICON_RESOURCE: windows::core::PCWSTR = windows::core::PCWSTR(1 as _);
 
+/// UI text follows the Windows display language: Vietnamese when it is Vietnamese,
+/// English otherwise.
+pub(crate) fn vietnamese_ui() -> bool {
+    use std::sync::OnceLock;
+    static VIETNAMESE: OnceLock<bool> = OnceLock::new();
+    *VIETNAMESE.get_or_init(|| {
+        // PRIMARYLANGID(LANG_VIETNAMESE) == 0x2A.
+        let language = unsafe { windows::Win32::Globalization::GetUserDefaultUILanguage() };
+        language & 0x3ff == 0x2a
+    })
+}
+
+/// Picks the Vietnamese or English text for the current display language.
+pub(crate) fn tr(vietnamese: &'static str, english: &'static str) -> &'static str {
+    if vietnamese_ui() {
+        vietnamese
+    } else {
+        english
+    }
+}
+
 static mut MODULE: HMODULE = HMODULE(std::ptr::null_mut());
 
 pub(crate) fn module() -> HMODULE {

@@ -52,7 +52,7 @@ time they reach the app as usual.
 
 ### Settings
 
-Click the KeyIn icon in the menu bar and choose **Tùy chỉnh…** (⌘,).
+Click the KeyIn icon in the menu bar and choose **Settings…** (⌘,) — **Tùy chỉnh…** when macOS is set to Vietnamese. The settings, menus and candidate-window hints follow the system language: Vietnamese on a Vietnamese system, English otherwise.
 
 ![KeyIn settings window](docs/media/keyin-settings.png)
 
@@ -82,7 +82,7 @@ Requires Apple Silicon and macOS 27.0 or later.
 4. Log out of macOS and log back in.
 5. Open **System Settings > Keyboard > Text Input > Edit > +**, find KeyIn under
    Vietnamese, add it, and select KeyIn in the input menu.
-6. Optional: choose **Tùy chỉnh…** in the KeyIn menu to pick languages and
+6. Optional: choose **Settings…** (**Tùy chỉnh…**) in the KeyIn menu to pick languages and
    options (see [Settings](#settings)).
 
 To uninstall, switch to ABC, quit KeyIn, remove it from Keyboard settings, and
@@ -144,7 +144,7 @@ A Text Services Framework port built from the same Rust engine lives in
 Vietnamese → Chinese). In manual mode the new language stays for the following
 words. **Shift–Tab** toggles Auto: turning it off pins the language currently
 shown; turning it on resumes per-word detection. Neither key is taken when no
-word is being composed. Both can be disabled in **Tùy chỉnh…**, in which case Tab
+word is being composed. Both can be disabled in **Settings…**, in which case Tab
 commits the word and moves on as in earlier versions. (The Command–Space hotkey of
 0.3 has been removed; it conflicted with Spotlight.)
 
@@ -266,7 +266,7 @@ no candidates they commit the word and pass through to the application.
 
 ### Chinese word meanings
 
-In **Tùy chỉnh…**, set **Nghĩa chữ Hán** to **Tiếng Việt** or **English** to show a
+In **Settings…**, set **Chinese meanings** (**Nghĩa chữ Hán**) to **Tiếng Việt** or **English** to show a
 gloss beside each Chinese candidate while typing; candidates then list
 vertically. Choose **Tắt** to restore the single candidate row (the default). The selection is saved; number keys and Space still insert only
 Chinese text.

@@ -1,12 +1,12 @@
-//! The "KeyIn – Cài đặt" window, a small form like the macOS settings panel. It runs in
+//! The "KeyIn – Settings" window, a small form like the macOS settings panel. It runs in
 //! its own process (`rundll32 keyin_tsf.dll,KeyInSettings`) so no application hosting the
 //! text service ever shows modal UI; changes are saved immediately and every input
 //! context picks them up on its next key press.
-use crate::{engine, settings};
+use crate::{engine, settings, tr};
 use keyin::controller::Settings;
 use std::ffi::c_void;
 use windows::{
-    core::{w, PCWSTR, PSTR},
+    core::{w, HSTRING, PCWSTR, PSTR},
     Win32::{
         Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Gdi::{CreateFontW, GetSysColorBrush, COLOR_BTNFACE, FW_NORMAL, HFONT},
@@ -298,7 +298,7 @@ pub extern "system" fn KeyInSettings(_: HWND, _: HINSTANCE, _: PSTR, _: i32) {
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             CLASS,
-            w!("KeyIn – Cài đặt"),
+            &HSTRING::from(tr("KeyIn – Cài đặt", "KeyIn – Settings")),
             WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -332,37 +332,71 @@ pub extern "system" fn KeyInSettings(_: HWND, _: HINSTANCE, _: PSTR, _: i32) {
         )
     };
     let form = Form { hwnd, scale, font };
-    form.label("Ngôn ngữ:", 16, 16, 110);
-    for (index, name) in [(1, "Tiếng Anh"), (2, "Tiếng Việt"), (3, "Tiếng Trung")] {
-        form.checkbox(name, ID_LANGUAGE + index, 130 + (index - 1) * 85, 16, 85);
+    form.label(tr("Ngôn ngữ:", "Languages:"), 16, 16, 100);
+    for (index, name) in [
+        (1, tr("Tiếng Anh", "English")),
+        (2, tr("Tiếng Việt", "Vietnamese")),
+        (3, tr("Tiếng Trung", "Chinese")),
+    ] {
+        form.checkbox(name, ID_LANGUAGE + index, 120 + (index - 1) * 88, 16, 88);
     }
-    form.checkbox("Tự nhận diện ngôn ngữ (Auto)", ID_AUTO, 16, 48, 340);
-    form.label("Khi tắt Auto, gõ:", 16, 78, 110);
+    form.checkbox(
+        tr(
+            "Tự nhận diện ngôn ngữ (Auto)",
+            "Detect language automatically (Auto)",
+        ),
+        ID_AUTO,
+        16,
+        48,
+        340,
+    );
+    form.label(tr("Khi tắt Auto, gõ:", "Without Auto, type:"), 16, 78, 112);
     form.combo(
-        &["Tiếng Anh", "Tiếng Việt (Telex)", "Tiếng Trung (Pinyin)"],
+        &[
+            tr("Tiếng Anh", "English"),
+            tr("Tiếng Việt (Telex)", "Vietnamese (Telex)"),
+            tr("Tiếng Trung (Pinyin)", "Chinese (Pinyin)"),
+        ],
         ID_MANUAL,
         130,
         78,
         230,
     );
-    form.checkbox("Tự sửa lỗi gõ", ID_AUTOCORRECT, 16, 114, 340);
     form.checkbox(
-        "Tab đổi tiếng, Shift+Tab bật/tắt Auto khi đang gõ",
+        tr("Tự sửa lỗi gõ", "Fix typos"),
+        ID_AUTOCORRECT,
+        16,
+        114,
+        340,
+    );
+    form.checkbox(
+        tr(
+            "Tab đổi tiếng, Shift+Tab bật/tắt Auto khi đang gõ",
+            "Tab switches language, Shift+Tab toggles Auto while typing",
+        ),
         ID_TABS,
         16,
         140,
         360,
     );
     form.checkbox(
-        "Học lựa chọn tiếng Trung (lưu trên máy)",
+        tr(
+            "Học lựa chọn tiếng Trung (lưu trên máy)",
+            "Learn Chinese choices (saved on this PC)",
+        ),
         ID_LEARN,
         16,
         166,
         360,
     );
-    form.label("Nghĩa từ tiếng Trung:", 16, 200, 130);
+    form.label(
+        tr("Nghĩa từ tiếng Trung:", "Chinese meanings:"),
+        16,
+        200,
+        130,
+    );
     form.combo(
-        &["Tắt", "Tiếng Việt", "English"],
+        &[tr("Tắt", "Off"), "Tiếng Việt", "English"],
         ID_MEANINGS,
         150,
         200,
@@ -370,7 +404,7 @@ pub extern "system" fn KeyInSettings(_: HWND, _: HINSTANCE, _: PSTR, _: i32) {
     );
     form.control(
         w!("BUTTON"),
-        "Đóng",
+        tr("Đóng", "Close"),
         (BS_PUSHBUTTON as u32) | WS_TABSTOP.0,
         ID_CLOSE,
         (284, 244, 90, 28),

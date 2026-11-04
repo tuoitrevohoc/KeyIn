@@ -1,6 +1,6 @@
 //! Taskbar input-mode button: shows the active language and holds the settings menu.
 //! Left click cycles Auto → EN → VI → 中; the menu mirrors the macOS settings window.
-use crate::{service::Shared, settings_window, CLSID_KEYIN};
+use crate::{service::Shared, settings_window, tr, CLSID_KEYIN};
 use keyin::controller::Settings;
 use windows::{
     core::{implement, IUnknown, Interface, Result, BSTR, GUID},
@@ -132,18 +132,32 @@ impl ITfLangBarItemButton_Impl for LangBarButton_Impl {
         let settings = self.shared.settings();
         let mode = settings.mode();
         let enabled = settings.enabled();
-        menu_item(menu, MENU_SETTINGS, false, "Tùy chỉnh…");
-        menu_item(menu, MENU_AUTO, mode == 0, "Tự nhận diện ngôn ngữ (Auto)");
+        menu_item(menu, MENU_SETTINGS, false, tr("Tùy chỉnh…", "Settings…"));
+        menu_item(
+            menu,
+            MENU_AUTO,
+            mode == 0,
+            tr(
+                "Tự nhận diện ngôn ngữ (Auto)",
+                "Detect language automatically (Auto)",
+            ),
+        );
         for (index, name) in [
-            (1, "Tiếng Anh"),
-            (2, "Tiếng Việt (Telex)"),
-            (3, "Tiếng Trung (Pinyin giản thể)"),
+            (1, tr("Tiếng Anh", "English")),
+            (2, tr("Tiếng Việt (Telex)", "Vietnamese (Telex)")),
+            (
+                3,
+                tr(
+                    "Tiếng Trung (Pinyin giản thể)",
+                    "Chinese (Simplified Pinyin)",
+                ),
+            ),
         ] {
             menu_item(
                 menu,
                 MENU_LANGUAGE + index,
                 mode == index,
-                &format!("Gõ {name}"),
+                &format!("{} {name}", tr("Gõ", "Type")),
             );
         }
         for (index, name) in [(1, "EN"), (2, "VI"), (3, "中")] {
@@ -151,31 +165,40 @@ impl ITfLangBarItemButton_Impl for LangBarButton_Impl {
                 menu,
                 MENU_ENABLED + index,
                 enabled & (1 << index) != 0,
-                &format!("Bật {name}"),
+                &format!("{} {name}", tr("Bật", "Enable")),
             );
         }
         menu_item(
             menu,
             MENU_AUTOCORRECT,
             settings.autocorrect,
-            "Tự sửa lỗi gõ",
+            tr("Tự sửa lỗi gõ", "Fix typos"),
         );
         menu_item(
             menu,
             MENU_TABS,
             settings.tab_shortcuts,
-            "Tab đổi tiếng, ⇧Tab bật/tắt Auto",
+            tr(
+                "Tab đổi tiếng, ⇧Tab bật/tắt Auto",
+                "Tab switches language, ⇧Tab toggles Auto",
+            ),
         );
         menu_item(
             menu,
             MENU_LEARN,
             settings.learn_chinese,
-            "Học lựa chọn tiếng Trung (cục bộ)",
+            tr(
+                "Học lựa chọn tiếng Trung (cục bộ)",
+                "Learn Chinese choices (on this PC)",
+            ),
         );
         for (index, name) in [
-            "Nghĩa tiếng Trung: Tắt",
-            "Nghĩa tiếng Trung: Tiếng Việt",
-            "Nghĩa tiếng Trung: English",
+            tr("Nghĩa tiếng Trung: Tắt", "Chinese meanings: Off"),
+            tr(
+                "Nghĩa tiếng Trung: Tiếng Việt",
+                "Chinese meanings: Vietnamese",
+            ),
+            tr("Nghĩa tiếng Trung: English", "Chinese meanings: English"),
         ]
         .iter()
         .enumerate()
