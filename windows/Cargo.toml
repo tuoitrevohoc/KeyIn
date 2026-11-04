@@ -1,6 +1,6 @@
 [package]
 name = "keyin-tsf"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2021"
 license = "LGPL-3.0-or-later"
 description = "KeyIn Text Services Framework (TSF) input method for Windows"
