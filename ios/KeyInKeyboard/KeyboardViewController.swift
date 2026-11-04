@@ -7,7 +7,6 @@ final class KeyboardViewController: UIInputViewController, TextOutput {
     override func viewDidLoad() {
         super.viewDidLoad()
         composer.output = self
-        Diag.install()
         keyboard.onGlobe = { [weak self] view, event in
             self?.handleInputModeList(from: view, with: event)
         }
