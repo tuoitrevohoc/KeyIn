@@ -264,10 +264,22 @@ final class KeyboardView: UIView {
         bubble.isHidden = false
     }
 
+    /// Thumbs land below what they aim at on the upper rows and above it on the
+    /// bottom row, so rows are hit-tested where fingers actually land. The
+    /// stops map measured row boundaries (62, 118, 160) to the drawn ones.
+    private static func aimedY(_ y: CGFloat) -> CGFloat {
+        let stops: [(landed: CGFloat, drawn: CGFloat)] = [(0, 0), (62, 54), (118, 108), (160, 162), (216, 216)]
+        for (low, high) in zip(stops, stops.dropFirst()) where y <= high.landed {
+            return low.drawn + (y - low.landed) * (high.drawn - low.drawn) / (high.landed - low.landed)
+        }
+        return y
+    }
+
     /// The key under `point`. Letters that can follow what is being typed get a
     /// slightly larger target, so a touch near the border of two keys goes to
     /// the one that makes sense ("zh" then a/e/i/o/u rather than their neighbours).
-    private func keyAt(_ point: CGPoint) -> (key: Key, view: UILabel)? {
+    private func keyAt(_ landing: CGPoint) -> (key: Key, view: UILabel)? {
+        let point = CGPoint(x: landing.x, y: Self.aimedY(landing.y))
         guard let plain = keyViews.min(by: { distance(point, $0.view.frame) < distance(point, $1.view.frame) }) else {
             return nil
         }
@@ -281,7 +293,7 @@ final class KeyboardView: UIView {
             let dx = (point.x - frame.midX) / frame.width, dy = (point.y - frame.midY) / frame.height
             let d = (dx * dx + dy * dy).squareRoot()
             guard d < 0.9 else { return nil }
-            return likely & (1 << (c.value - 97)) != 0 ? d * 0.75 : d
+            return likely & (1 << (c.value - 97)) != 0 ? d * 0.7 : d
         }
         return keyViews.compactMap { entry in score(entry).map { (entry, $0) } }
             .min { $0.1 < $1.1 }?.0 ?? plain

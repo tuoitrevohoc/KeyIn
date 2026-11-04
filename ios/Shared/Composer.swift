@@ -57,7 +57,7 @@ final class Composer {
     private var wordMode: UInt32 = 0
     /// What this composition has typed into the document so far.
     private var shown = ""
-    private var lastWrite = Date.distantPast
+    private var lastKey = Date.distantPast
     private var recentLanguages: [Language] = []
     private let worker = EngineWorker()
     /// Bumped by every change to the input; `applied` catches up as replies arrive.
@@ -95,6 +95,7 @@ final class Composer {
 
     private func scheduleRefresh() {
         if raw.isEmpty { wordMode = 0 }
+        lastKey = Date()
         let settled = applied == generation
         generation += 1
         let next = EngineWorker.Request(
@@ -148,10 +149,14 @@ final class Composer {
         if language == .chinese, !choices.isEmpty { confirm() } else { commit() }
     }
 
-    /// Whether the text before the cursor still ends with what we typed. Hosts
-    /// report our own edits back asynchronously, so a recent write counts as ours.
+    /// Whether the text before the cursor can still be ours. Hosts report our own
+    /// edits late and some report no context at all, so while the typist is
+    /// active, or when the host says nothing, the composition is kept: wrongly
+    /// ending it would lose the letters in flight.
     func owns(textBefore: String?) -> Bool {
-        shown.isEmpty || Date().timeIntervalSince(lastWrite) < 0.5 || (textBefore ?? "").hasSuffix(shown)
+        guard !shown.isEmpty, applied == generation, Date().timeIntervalSince(lastKey) > 1,
+              let textBefore, !textBefore.isEmpty else { return true }
+        return textBefore.hasSuffix(shown)
     }
 
     /// Host text changed underneath us; the shown preedit is no longer ours to replace.
@@ -208,7 +213,6 @@ final class Composer {
         let suffix = String(text.dropFirst(common))
         if !suffix.isEmpty { output?.insertText(suffix) }
         shown = text
-        lastWrite = Date()
     }
 }
 
