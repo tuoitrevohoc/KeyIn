@@ -1,8 +1,8 @@
 import UIKit
 
 /// QWERTY keyboard with a candidate bar, shared by the keyboard extension and
-/// the container app's playground. Touches go to the nearest key, so the gaps
-/// between keys never swallow a tap.
+/// the container app's playground. The whole view takes touches, and each goes
+/// to the nearest key.
 final class KeyboardView: UIView {
     enum Key: Equatable {
         case character(String)
@@ -40,7 +40,9 @@ final class KeyboardView: UIView {
     init(composer: Composer) {
         self.composer = composer
         super.init(frame: .zero)
-        backgroundColor = .clear
+        // Touches on fully transparent pixels of a keyboard extension never
+        // reach it, which silently lost every tap between two keys.
+        backgroundColor = UIColor.white.withAlphaComponent(0.001)
         bar.showsHorizontalScrollIndicator = false
         if #available(iOS 26.0, *) {
             // The default soft edge effect blurs the whole bar inside a keyboard.
@@ -149,18 +151,7 @@ final class KeyboardView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         bar.frame = CGRect(x: 0, y: 0, width: bounds.width, height: Self.barHeight)
-        var x: CGFloat = 6
-        for chip in chips.prefix(chipActions.count) {
-            let width = (chip.titleLabel?.intrinsicContentSize.width ?? 0) + 24
-            chip.frame = CGRect(x: x, y: (Self.barHeight - 34) / 2, width: width, height: 34)
-            x += width + 4
-        }
-        if !preview.isHidden {
-            let width = preview.intrinsicContentSize.width
-            preview.frame = CGRect(x: x, y: 0, width: width, height: Self.barHeight)
-            x += width
-        }
-        bar.contentSize = CGSize(width: x + 6, height: Self.barHeight)
+        layoutBar()
         keyArea.frame = CGRect(x: 0, y: Self.barHeight, width: bounds.width, height: bounds.height - Self.barHeight)
 
         let gap: CGFloat = 6, side: CGFloat = 3
@@ -176,6 +167,22 @@ final class KeyboardView: UIView {
                 x += w; index += 1
             }
         }
+    }
+
+    /// Candidates change on every keystroke; the keys do not.
+    private func layoutBar() {
+        var x: CGFloat = 6
+        for chip in chips.prefix(chipActions.count) {
+            let width = (chip.titleLabel?.intrinsicContentSize.width ?? 0) + 24
+            chip.frame = CGRect(x: x, y: (Self.barHeight - 34) / 2, width: width, height: 34)
+            x += width + 4
+        }
+        if !preview.isHidden {
+            let width = preview.intrinsicContentSize.width
+            preview.frame = CGRect(x: x, y: 0, width: width, height: Self.barHeight)
+            x += width
+        }
+        bar.contentSize = CGSize(width: x + 6, height: Self.barHeight)
     }
 
     private func width(of key: Key, in row: [Key], unit: CGFloat) -> CGFloat {
@@ -407,7 +414,7 @@ final class KeyboardView: UIView {
         chips.dropFirst(items.count).forEach { $0.isHidden = true }
         chipActions = items.map(\.action)
         bar.setContentOffset(.zero, animated: false)
-        setNeedsLayout()
+        layoutBar()
     }
 
     @objc private func chipTapped(_ chip: UIButton) {
