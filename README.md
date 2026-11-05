@@ -117,9 +117,11 @@ and staple it. Without them the package is unsigned.
 
 The `macOS installer` workflow does this on every `v*` tag and attaches the signed
 package to the tag's release. Run it manually with a tag to re-sign a release that
-already exists. It reads these Actions secrets: `CERTIFICATE_P12` (base64 `.p12`
-holding both Developer ID identities), `CERTIFICATE_PASSWORD`, `NOTARY_KEY` (an App
-Store Connect `.p8` file), `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`.
+already exists. It reads these Actions secrets: `CERTIFICATE_P12` and
+`CERTIFICATE_PASSWORD` (base64 `.p12` of the Developer ID Installer identity),
+`APP_CERTIFICATE_P12` and `APP_CERTIFICATE_PASSWORD` (the same for Developer ID
+Application), `NOTARY_KEY` (an App Store Connect `.p8` file), `NOTARY_KEY_ID` and
+`NOTARY_ISSUER_ID`.
 
 ### Windows (experimental)
 
