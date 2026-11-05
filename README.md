@@ -68,7 +68,7 @@ Click the KeyIn icon in the menu bar and choose **Settings…** (⌘,) — **Tù
 
 ## Install
 
-Requires Apple Silicon and macOS 27.0 or later.
+Requires Apple Silicon and macOS 26.0 or later.
 
 1. Download `KeyIn-<version>-macos-arm64.pkg` from the
    [latest release](https://github.com/tuoitrevohoc/KeyIn/releases).
