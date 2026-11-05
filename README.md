@@ -115,6 +115,12 @@ and `KEYIN_INSTALLER_IDENTITY` (Developer ID Installer) to sign it, and
 `KEYIN_NOTARY_PROFILE` (a `notarytool store-credentials` profile) to notarize
 and staple it. Without them the package is unsigned.
 
+The `macOS installer` workflow does this on every `v*` tag and attaches the signed
+package to the tag's release. Run it manually with a tag to re-sign a release that
+already exists. It reads these Actions secrets: `CERTIFICATE_P12` (base64 `.p12`
+holding both Developer ID identities), `CERTIFICATE_PASSWORD`, `NOTARY_KEY` (an App
+Store Connect `.p8` file), `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`.
+
 ### Windows (experimental)
 
 A Text Services Framework port built from the same Rust engine lives in

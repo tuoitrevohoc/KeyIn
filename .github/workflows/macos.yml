@@ -1,0 +1,91 @@
+name: macOS installer
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/macos.yml
+      - native/**
+      - scripts/**
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build, sign and attach to its release
+        required: true
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      # Secrets are only used on tags and manual runs, never on pull requests.
+      SIGN: ${{ github.event_name != 'pull_request' }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Install librime
+        run: brew install librime
+      - name: Build
+        run: ./scripts/build.sh
+      - name: Test
+        run: ./scripts/test-native.sh
+      - name: Import signing certificates
+        if: env.SIGN == 'true'
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/pkgbuild
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/signing.p12"
+          identities=$(security find-identity -v "$keychain")
+          app=$(sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' <<< "$identities" | head -1)
+          installer=$(sed -n 's/.*"\(Developer ID Installer: .*\)"/\1/p' <<< "$identities" | head -1)
+          [[ -n "$app" ]] || { echo '::error::CERTIFICATE_P12 has no Developer ID Application identity'; exit 1; }
+          [[ -n "$installer" ]] || { echo '::error::CERTIFICATE_P12 has no Developer ID Installer identity'; exit 1; }
+          echo "KEYIN_APP_IDENTITY=$app" >> "$GITHUB_ENV"
+          echo "KEYIN_INSTALLER_IDENTITY=$installer" >> "$GITHUB_ENV"
+      - name: Package
+        run: ./scripts/package.sh
+      - name: Notarize
+        if: env.SIGN == 'true'
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          package=$(echo build/installer/*/KeyIn-*-macos-arm64.pkg)
+          printenv NOTARY_KEY > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit "$package" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          rm "$RUNNER_TEMP/notary.p8"
+          xcrun stapler staple "$package"
+          xcrun stapler validate "$package"
+          spctl --assess --type install --verbose "$package"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeyIn-macos-arm64
+          path: build/installer/*/KeyIn-*-macos-arm64.pkg
+      - name: Attach to release
+        if: env.SIGN == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" > /dev/null 2>&1 || { echo "No release for $TAG yet; the package is in the workflow artifacts."; exit 0; }
+          package=$(echo build/installer/*/KeyIn-*-macos-arm64.pkg)
+          name=$(basename "$package")
+          # SHA256SUMS.txt also lists the Windows installers, so replace only this line.
+          gh release download "$TAG" -p SHA256SUMS.txt -D "$RUNNER_TEMP" --clobber || touch "$RUNNER_TEMP/SHA256SUMS.txt"
+          { grep -v "  $name\$" "$RUNNER_TEMP/SHA256SUMS.txt" || true; (cd "$(dirname "$package")" && shasum -a 256 "$name"); } | sort -k2 > "$RUNNER_TEMP/sums.txt"
+          mv "$RUNNER_TEMP/sums.txt" "$RUNNER_TEMP/SHA256SUMS.txt"
+          gh release upload "$TAG" "$package" "$RUNNER_TEMP/SHA256SUMS.txt" --clobber
